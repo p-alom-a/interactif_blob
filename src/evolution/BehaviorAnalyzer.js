@@ -4,7 +4,7 @@ import { Vector2 } from '../utils/mathHelpers';
  * Détecte les comportements émergents dans une population
  */
 export function detectBehavior(boids, cursor) {
-  if (boids.length === 0) return 'Initialisation';
+  if (boids.length === 0) return '🧬 Initialisation';
 
   const behaviors = {
     coordinated: checkCoordination(boids),
@@ -14,9 +14,19 @@ export function detectBehavior(boids, cursor) {
     zigzagging: checkZigzag(boids)
   };
 
+  console.log('📊 SCORES COMPORTEMENTS:', {
+    coordinated: behaviors.coordinated.toFixed(3),
+    exploring: behaviors.exploring.toFixed(3),
+    huddling: behaviors.huddling.toFixed(3),
+    fleeing: behaviors.fleeing.toFixed(3),
+    zigzagging: behaviors.zigzagging.toFixed(3)
+  });
+
   // Retourner le comportement dominant
   const dominant = Object.entries(behaviors)
     .sort(([, a], [, b]) => b - a)[0];
+
+  console.log('🏆 Dominant:', dominant[0], 'score:', dominant[1].toFixed(3));
 
   return formatBehaviorName(dominant[0]);
 }

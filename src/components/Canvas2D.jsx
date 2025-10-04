@@ -13,6 +13,8 @@ function Canvas2D() {
   const animationIdRef = useRef(null);
   const lastTimeRef = useRef(performance.now());
   const [, forceUpdate] = useState(0);
+  const [cursorMode, setCursorMode] = useState('auto');
+  const [aiCursorBehavior, setAiCursorBehavior] = useState('hunter');
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -70,6 +72,14 @@ function Canvas2D() {
       population.boids.forEach((boid) => {
         drawBoid(ctx, boid, cursor);
       });
+
+      // Dessiner le curseur artificiel si mode auto
+      if (cursorMode === 'auto' && populationRef.current) {
+        const aiPos = populationRef.current.getCursorPosition();
+        if (aiPos) {
+          drawAICursor(ctx, aiPos.x, aiPos.y, aiCursorBehavior);
+        }
+      }
     };
 
     animate(performance.now());
@@ -124,6 +134,68 @@ function Canvas2D() {
     }
   };
 
+  const handleCursorModeToggle = () => {
+    const newMode = cursorMode === 'auto' ? 'manual' : 'auto';
+    console.log('🔄 Toggle curseur:', cursorMode, '→', newMode);
+    setCursorMode(newMode);
+    if (populationRef.current) {
+      populationRef.current.setCursorMode(newMode);
+    }
+  };
+
+  const handleAICursorBehaviorChange = (behavior) => {
+    console.log('🔄 Changement comportement IA:', aiCursorBehavior, '→', behavior);
+    setAiCursorBehavior(behavior);
+    if (populationRef.current) {
+      populationRef.current.setAICursorBehavior(behavior);
+    }
+  };
+
+  function drawAICursor(ctx, x, y, mode) {
+    ctx.save();
+
+    // Couleur selon le mode
+    const colors = {
+      hunter: [255, 100, 100],   // Rouge
+      predator: [255, 50, 255],  // Magenta
+      patrol: [100, 200, 255],   // Bleu
+      random: [255, 255, 100]    // Jaune
+    };
+    const color = colors[mode] || [255, 100, 100];
+
+    // Cercle pulsant
+    const time = Date.now() * 0.005;
+    const pulseRadius = 25 + Math.sin(time) * 8;
+
+    ctx.strokeStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.8)`;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, y, pulseRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Cercle intérieur
+    ctx.strokeStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, 1)`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, 12, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Croix centrale
+    ctx.beginPath();
+    ctx.moveTo(x - 8, y);
+    ctx.lineTo(x + 8, y);
+    ctx.moveTo(x, y - 8);
+    ctx.lineTo(x, y + 8);
+    ctx.stroke();
+
+    // Label "IA"
+    ctx.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, 1)`;
+    ctx.font = 'bold 14px monospace';
+    ctx.fillText('IA', x + 30, y + 5);
+
+    ctx.restore();
+  }
+
   return (
     <>
       <canvas
@@ -142,6 +214,10 @@ function Canvas2D() {
         onSpeedUp={handleSpeedUp}
         onSave={handleSave}
         onDownload={handleDownload}
+        cursorMode={cursorMode}
+        onCursorModeToggle={handleCursorModeToggle}
+        aiCursorBehavior={aiCursorBehavior}
+        onAICursorBehaviorChange={handleAICursorBehaviorChange}
       />
     </>
   );

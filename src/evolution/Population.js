@@ -3,6 +3,7 @@ import { calculateFitness, calculatePopulationStats } from './FitnessEvaluator';
 import { evolvePopulation } from './GeneticAlgorithm';
 import { saveBrain, loadBrain, downloadBrain } from '../ml/BrainModel';
 import { detectBehavior } from './BehaviorAnalyzer';
+import { ArtificialCursor } from '../utils/ArtificialCursor';
 
 const GENERATION_DURATION = 20; // secondes par génération
 const POPULATION_SIZE = 100;
@@ -19,7 +20,13 @@ export class Population {
     this.isEvolving = true;
     this.currentBehavior = '🧬 Initialisation';
     this.lastCursor = null;
-    this.lastBehaviorCheck = 0; // Timer pour la détection de comportement
+    this.lastBehaviorCheck = -2; // Timer pour la détection de comportement (force détection immédiate)
+
+    // Curseur artificiel
+    this.cursorMode = 'auto'; // 'auto' ou 'manual'
+    this.artificialCursor = new ArtificialCursor(window.innerWidth, window.innerHeight);
+
+    console.log('🤖 Population initialisée - Mode curseur:', this.cursorMode);
 
     // Initialiser la première génération
     this.initializePopulation();
@@ -47,8 +54,16 @@ export class Population {
    * - Accumule la fitness
    * - Gère le timer de génération
    */
-  update(cursor, screenWidth, screenHeight, deltaTime) {
+  update(manualCursor, screenWidth, screenHeight, deltaTime) {
     if (!this.isEvolving) return;
+
+    // Déterminer quel curseur utiliser
+    let cursor;
+    if (this.cursorMode === 'auto') {
+      cursor = this.artificialCursor.update(this.boids, deltaTime);
+    } else {
+      cursor = manualCursor;
+    }
 
     // Sauvegarder curseur pour détection de comportement
     this.lastCursor = cursor;
@@ -78,9 +93,17 @@ export class Population {
     // Incrémenter timer de génération
     this.generationTimer += deltaTime;
 
-    // Détecter comportement toutes les 2 secondes
-    if (this.generationTimer - this.lastBehaviorCheck >= 2.0 && cursor) {
+    // Détecter comportement toutes les 1 seconde
+    if (this.generationTimer - this.lastBehaviorCheck >= 1.0 && cursor) {
+      console.log('🔍 DÉTECTION COMPORTEMENT:', {
+        timer: this.generationTimer.toFixed(2),
+        lastCheck: this.lastBehaviorCheck.toFixed(2),
+        cursorPos: { x: cursor.x?.toFixed(0) || cursor.x, y: cursor.y?.toFixed(0) || cursor.y }
+      });
+
       this.currentBehavior = detectBehavior(this.boids, cursor);
+
+      console.log('✅ Comportement détecté:', this.currentBehavior);
       this.lastBehaviorCheck = this.generationTimer;
     }
 
@@ -94,6 +117,8 @@ export class Population {
    * Passe à la génération suivante
    */
   nextGeneration() {
+    console.log('🧬 === GÉNÉRATION', this.generation, 'TERMINÉE ===');
+
     // Calculer stats de la génération
     this.stats = calculatePopulationStats(this.boids);
 
@@ -237,5 +262,31 @@ export class Population {
 
     console.log(`📂 Champion chargé: ${name}`);
     return true;
+  }
+
+  /**
+   * Bascule entre curseur auto et manuel
+   */
+  setCursorMode(mode) {
+    this.cursorMode = mode; // 'auto' ou 'manual'
+    console.log('🎯 === MODE CURSEUR CHANGÉ:', mode, '===');
+  }
+
+  /**
+   * Change le comportement du curseur IA
+   */
+  setAICursorBehavior(behavior) {
+    this.artificialCursor.setMode(behavior);
+    console.log('🤖 === COMPORTEMENT IA CHANGÉ:', behavior, '===');
+  }
+
+  /**
+   * Récupère la position actuelle du curseur (pour affichage)
+   */
+  getCursorPosition() {
+    if (this.cursorMode === 'auto') {
+      return this.artificialCursor.position;
+    }
+    return null; // En mode manuel, pas besoin d'afficher
   }
 }

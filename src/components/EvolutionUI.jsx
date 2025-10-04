@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, onDownload }) {
+function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, onDownload, cursorMode, onCursorModeToggle, aiCursorBehavior, onAICursorBehaviorChange }) {
   const [stats, setStats] = useState({ avg: 0, best: 0, worst: 0, median: 0 });
   const [generation, setGeneration] = useState(1);
   const [progress, setProgress] = useState(0);
@@ -280,6 +280,80 @@ function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, on
         >
           📥 Download
         </button>
+      </div>
+
+      {/* Contrôle du curseur IA */}
+      <div style={{
+        marginTop: '15px',
+        padding: '12px',
+        backgroundColor: cursorMode === 'auto'
+          ? 'rgba(255, 100, 100, 0.15)'
+          : 'rgba(100, 200, 255, 0.15)',
+        borderRadius: '8px',
+        border: `1px solid ${cursorMode === 'auto' ? 'rgba(255, 100, 100, 0.3)' : 'rgba(100, 200, 255, 0.3)'}`
+      }}>
+        <div style={{
+          fontSize: '12px',
+          marginBottom: '10px',
+          color: 'rgba(255, 255, 255, 0.6)'
+        }}>
+          🎯 Contrôle du curseur
+        </div>
+
+        <button
+          onClick={onCursorModeToggle}
+          style={{
+            padding: '10px 16px',
+            backgroundColor: cursorMode === 'auto'
+              ? 'rgba(255, 100, 100, 0.3)'
+              : 'rgba(100, 200, 255, 0.3)',
+            color: cursorMode === 'auto' ? '#ff6666' : '#64c8ff',
+            border: `2px solid ${cursorMode === 'auto' ? '#ff6666' : '#64c8ff'}`,
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontFamily: 'monospace',
+            fontSize: '13px',
+            fontWeight: 'bold',
+            width: '100%',
+            marginBottom: '10px',
+            transition: 'all 0.2s'
+          }}
+        >
+          {cursorMode === 'auto' ? '🤖 IA Activée' : '🖱️ Souris Active'}
+        </button>
+
+        {cursorMode === 'auto' && (
+          <div>
+            <div style={{
+              fontSize: '11px',
+              color: 'rgba(255, 255, 255, 0.5)',
+              marginBottom: '6px'
+            }}>
+              Comportement IA:
+            </div>
+            <select
+              value={aiCursorBehavior}
+              onChange={(e) => onAICursorBehaviorChange(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px',
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                color: '#fff',
+                border: '1px solid rgba(255, 100, 100, 0.5)',
+                borderRadius: '6px',
+                fontFamily: 'monospace',
+                fontSize: '12px',
+                cursor: 'pointer',
+                outline: 'none'
+              }}
+            >
+              <option value="hunter">🎯 Chasseur (suit le groupe)</option>
+              <option value="predator">⚡ Prédateur (agressif)</option>
+              <option value="patrol">🔄 Patrouilleur (cercles)</option>
+              <option value="random">🎲 Téléporteur (aléatoire)</option>
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Info */}
