@@ -1,6 +1,8 @@
 import { NeuralBoid } from './NeuralBoid';
 import { calculateFitness, calculatePopulationStats } from './FitnessEvaluator';
 import { evolvePopulation } from './GeneticAlgorithm';
+import { saveBrain, loadBrain, downloadBrain } from '../ml/BrainModel';
+import { detectBehavior } from './BehaviorAnalyzer';
 
 const GENERATION_DURATION = 20; // secondes par génération
 const POPULATION_SIZE = 100;
@@ -15,6 +17,8 @@ export class Population {
     this.stats = { avg: 0, best: 0, worst: 0, median: 0 };
     this.fitnessHistory = [];
     this.isEvolving = true;
+    this.currentBehavior = '🧬 Initialisation';
+    this.lastCursor = null;
 
     // Initialiser la première génération
     this.initializePopulation();
@@ -27,8 +31,8 @@ export class Population {
     this.boids = [];
 
     for (let i = 0; i < this.size; i++) {
-      const x = (Math.random() - 0.5) * window.innerWidth;
-      const y = (Math.random() - 0.5) * window.innerHeight;
+      const x = Math.random() * window.innerWidth;
+      const y = Math.random() * window.innerHeight;
       const boid = new NeuralBoid(x, y);
       this.boids.push(boid);
     }
@@ -44,6 +48,9 @@ export class Population {
    */
   update(cursor, screenWidth, screenHeight, deltaTime) {
     if (!this.isEvolving) return;
+
+    // Sauvegarder curseur pour détection de comportement
+    this.lastCursor = cursor;
 
     // Mettre à jour chaque boid
     this.boids.forEach(boid => {
@@ -69,6 +76,11 @@ export class Population {
 
     // Incrémenter timer de génération
     this.generationTimer += deltaTime;
+
+    // Détecter comportement toutes les 2 secondes
+    if (Math.floor(this.generationTimer) % 2 === 0 && cursor) {
+      this.currentBehavior = detectBehavior(this.boids, cursor);
+    }
 
     // Si génération terminée → évolution
     if (this.generationTimer >= this.generationDuration) {
@@ -164,5 +176,61 @@ export class Population {
   dispose() {
     this.boids.forEach(b => b.dispose());
     this.boids = [];
+  }
+
+  /**
+   * Sauvegarde le meilleur boid dans LocalStorage
+   */
+  async saveChampion() {
+    if (this.boids.length === 0) return false;
+
+    // Trier pour trouver le meilleur
+    const sorted = [...this.boids].sort((a, b) => b.fitness - a.fitness);
+    const champion = sorted[0];
+
+    const success = await saveBrain(champion.brain, `champion-gen${this.generation}`);
+    if (success) {
+      console.log(`💾 Champion sauvegardé (Génération ${this.generation})`);
+    }
+    return success;
+  }
+
+  /**
+   * Télécharge le meilleur boid en fichier
+   */
+  async downloadChampion() {
+    if (this.boids.length === 0) return false;
+
+    const sorted = [...this.boids].sort((a, b) => b.fitness - a.fitness);
+    const champion = sorted[0];
+
+    const success = await downloadBrain(champion.brain, `champion-gen${this.generation}`);
+    if (success) {
+      console.log(`📥 Champion téléchargé (Génération ${this.generation})`);
+    }
+    return success;
+  }
+
+  /**
+   * Charge un champion et remplace toute la population avec des clones mutés
+   */
+  async loadChampion(name = 'champion-gen1') {
+    const brain = await loadBrain(name);
+    if (!brain) return false;
+
+    // Disposer anciens boids
+    this.boids.forEach(b => b.dispose());
+
+    // Créer nouvelle population à partir du champion
+    this.boids = [];
+    for (let i = 0; i < this.size; i++) {
+      const x = Math.random() * window.innerWidth;
+      const y = Math.random() * window.innerHeight;
+      const boid = new NeuralBoid(x, y, brain);
+      this.boids.push(boid);
+    }
+
+    console.log(`📂 Champion chargé: ${name}`);
+    return true;
   }
 }

@@ -128,3 +128,42 @@ export function disposeBrain(brain) {
     brain.dispose();
   }
 }
+
+/**
+ * Sauvegarde un cerveau dans LocalStorage
+ */
+export async function saveBrain(brain, name = 'champion') {
+  try {
+    await brain.save(`localstorage://${name}`);
+    return true;
+  } catch (error) {
+    console.error('Erreur sauvegarde:', error);
+    return false;
+  }
+}
+
+/**
+ * Charge un cerveau depuis LocalStorage
+ */
+export async function loadBrain(name = 'champion') {
+  try {
+    const model = await tf.loadLayersModel(`localstorage://${name}`);
+    return model;
+  } catch (error) {
+    console.error('Erreur chargement:', error);
+    return null;
+  }
+}
+
+/**
+ * Télécharge un cerveau en JSON
+ */
+export async function downloadBrain(brain, filename = 'champion') {
+  try {
+    await brain.save(`downloads://${filename}`);
+    return true;
+  } catch (error) {
+    console.error('Erreur téléchargement:', error);
+    return false;
+  }
+}

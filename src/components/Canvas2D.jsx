@@ -1,16 +1,18 @@
-import { useEffect, useRef } from 'react';
-import { NeuralBoid } from '../evolution/NeuralBoid';
+import { useEffect, useRef, useState } from 'react';
+import { Population } from '../evolution/Population';
 import { Vector2, interpolateColor } from '../utils/mathHelpers';
+import EvolutionUI from './EvolutionUI';
 
-const POPULATION_SIZE = 100;
 const PARTICLE_BASE_SIZE = 8;
 const LINK_DISTANCE = 60;
 
 function Canvas2D() {
   const canvasRef = useRef(null);
-  const boidsRef = useRef([]);
+  const populationRef = useRef(null);
   const cursorRef = useRef(new Vector2(window.innerWidth / 2, window.innerHeight / 2));
   const animationIdRef = useRef(null);
+  const lastTimeRef = useRef(performance.now());
+  const [, forceUpdate] = useState(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -28,15 +30,9 @@ function Canvas2D() {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
-    // Initialisation des boids
-    const boids = [];
-    for (let i = 0; i < POPULATION_SIZE; i++) {
-      const x = Math.random() * canvas.width;
-      const y = Math.random() * canvas.height;
-      const boid = new NeuralBoid(x, y);
-      boids.push(boid);
-    }
-    boidsRef.current = boids;
+    // Initialisation de la population évolutionnaire
+    const population = new Population();
+    populationRef.current = population;
 
     // Gestion du curseur
     const handleMouseMove = (event) => {
@@ -46,40 +42,34 @@ function Canvas2D() {
     canvas.addEventListener('mousemove', handleMouseMove);
 
     // Boucle d'animation
-    const animate = () => {
+    const animate = (currentTime) => {
       animationIdRef.current = requestAnimationFrame(animate);
 
       const width = canvas.width;
       const height = canvas.height;
       const cursor = cursorRef.current;
 
+      // Calculer delta time
+      const deltaTime = (currentTime - lastTimeRef.current) / 1000; // en secondes
+      lastTimeRef.current = currentTime;
+
+      // Mettre à jour la population (gère évolution automatiquement)
+      population.update(cursor, width, height, deltaTime);
+
       // Background avec fade pour effet de trail
       ctx.fillStyle = 'rgba(10, 10, 20, 0.25)';
       ctx.fillRect(0, 0, width, height);
 
       // Dessiner les liens entre particules proches
-      drawLinks(ctx, boids);
+      drawLinks(ctx, population.boids);
 
-      // Mettre à jour et dessiner chaque boid
-      boids.forEach((boid) => {
-        // 1. Percevoir
-        const inputs = boid.perceive(cursor, boids, width, height);
-
-        // 2. Penser
-        const decision = boid.think(inputs);
-
-        // 3. Agir
-        boid.applyForce(decision);
-
-        // 4. Mettre à jour position
-        boid.update(width, height);
-
-        // 5. Dessiner
+      // Dessiner chaque boid
+      population.boids.forEach((boid) => {
         drawBoid(ctx, boid, cursor);
       });
     };
 
-    animate();
+    animate(performance.now());
 
     // Cleanup
     return () => {
@@ -88,35 +78,98 @@ function Canvas2D() {
       if (animationIdRef.current) {
         cancelAnimationFrame(animationIdRef.current);
       }
-      boids.forEach(boid => boid.dispose());
+      if (population) {
+        population.dispose();
+      }
     };
   }, []);
 
+  // Handlers pour l'UI
+  const handleReset = () => {
+    if (populationRef.current) {
+      populationRef.current.reset();
+      forceUpdate(n => n + 1);
+    }
+  };
+
+  const handleTogglePause = () => {
+    if (populationRef.current) {
+      populationRef.current.toggleEvolution();
+      forceUpdate(n => n + 1);
+    }
+  };
+
+  const handleSpeedUp = () => {
+    if (populationRef.current) {
+      const currentDuration = populationRef.current.generationDuration;
+      const newDuration = currentDuration === 20 ? 10 : 20;
+      populationRef.current.setGenerationDuration(newDuration);
+      forceUpdate(n => n + 1);
+    }
+  };
+
+  const handleSave = async () => {
+    if (populationRef.current) {
+      await populationRef.current.saveChampion();
+      alert('Champion sauvegardé dans le navigateur !');
+    }
+  };
+
+  const handleDownload = async () => {
+    if (populationRef.current) {
+      await populationRef.current.downloadChampion();
+    }
+  };
+
   return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        display: 'block',
-        width: '100vw',
-        height: '100vh',
-        background: 'rgb(10, 10, 20)',
-      }}
-    />
+    <>
+      <canvas
+        ref={canvasRef}
+        style={{
+          display: 'block',
+          width: '100vw',
+          height: '100vh',
+          background: 'rgb(10, 10, 20)',
+        }}
+      />
+      <EvolutionUI
+        population={populationRef.current}
+        onReset={handleReset}
+        onTogglePause={handleTogglePause}
+        onSpeedUp={handleSpeedUp}
+        onSave={handleSave}
+        onDownload={handleDownload}
+      />
+    </>
   );
 }
 
 function drawLinks(ctx, boids) {
-  ctx.strokeStyle = 'rgba(100, 200, 255, 0.1)';
-  ctx.lineWidth = 0.5;
-
   for (let i = 0; i < boids.length; i++) {
     for (let j = i + 1; j < boids.length; j++) {
       const dist = Vector2.dist(boids[i].position, boids[j].position);
       if (dist < LINK_DISTANCE) {
+        // Opacité basée sur la distance (plus proche = plus visible)
+        const opacity = (1 - dist / LINK_DISTANCE) * 0.15;
+
+        // Calculer couleur moyenne
+        const avgSpeed = (boids[i].velocity.mag() + boids[j].velocity.mag()) / 2;
+        const colorIntensity = Math.min(100 + avgSpeed * 10, 200);
+
+        ctx.strokeStyle = `rgba(${colorIntensity}, ${colorIntensity + 50}, 255, ${opacity})`;
+        ctx.lineWidth = 0.8;
+
+        // Effet de glow subtil
+        ctx.shadowBlur = 3;
+        ctx.shadowColor = `rgba(100, 200, 255, ${opacity * 0.5})`;
+
         ctx.beginPath();
         ctx.moveTo(boids[i].position.x, boids[i].position.y);
         ctx.lineTo(boids[j].position.x, boids[j].position.y);
         ctx.stroke();
+
+        // Reset shadow
+        ctx.shadowBlur = 0;
       }
     }
   }
@@ -136,27 +189,35 @@ function drawBoid(ctx, boid, cursor) {
 
   // Calculer la déformation selon la vitesse
   const speed = velocity.mag();
-  const stretchFactor = 1 + (speed / 10); // Plus rapide = plus étiré
+  const stretchFactor = 1 + (speed / 8); // Plus rapide = plus étiré
   const angle = Math.atan2(velocity.y, velocity.x);
 
   ctx.save();
   ctx.translate(position.x, position.y);
   ctx.rotate(angle);
 
+  // Effet de glow externe
+  ctx.shadowBlur = 15 + speed * 2;
+  ctx.shadowColor = `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.6)`;
+
   // Dessiner une forme blobby organique (ellipse étirée)
   ctx.beginPath();
 
   // Créer un blob avec plusieurs points ondulants
-  const numPoints = 8;
+  const numPoints = 10;
   const baseRadius = PARTICLE_BASE_SIZE;
+  const time = Date.now() * 0.002;
 
   for (let i = 0; i <= numPoints; i++) {
     const theta = (i / numPoints) * Math.PI * 2;
 
     // Rayon avec variation sinusoïdale pour effet organique
-    const noise = Math.sin(theta * 3 + Date.now() * 0.001) * 0.3;
-    const radiusX = baseRadius * stretchFactor * (1 + noise);
-    const radiusY = baseRadius * (1 + noise);
+    const noise1 = Math.sin(theta * 3 + time + boid.fitness * 0.01) * 0.25;
+    const noise2 = Math.cos(theta * 2 - time * 0.8) * 0.15;
+    const totalNoise = noise1 + noise2;
+
+    const radiusX = baseRadius * stretchFactor * (1 + totalNoise);
+    const radiusY = baseRadius * (1 + totalNoise * 0.5);
 
     const x = Math.cos(theta) * radiusX;
     const y = Math.sin(theta) * radiusY;
@@ -164,25 +225,40 @@ function drawBoid(ctx, boid, cursor) {
     if (i === 0) {
       ctx.moveTo(x, y);
     } else {
-      ctx.lineTo(x, y);
+      // Utiliser quadraticCurveTo pour des courbes plus douces
+      const prevTheta = ((i - 1) / numPoints) * Math.PI * 2;
+      const cpX = Math.cos(prevTheta + Math.PI / numPoints) * radiusX * 0.95;
+      const cpY = Math.sin(prevTheta + Math.PI / numPoints) * radiusY * 0.95;
+      ctx.quadraticCurveTo(cpX, cpY, x, y);
     }
   }
 
   ctx.closePath();
 
   // Dégradé radial pour effet de volume
-  const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, baseRadius * 2);
-  gradient.addColorStop(0, `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.8)`);
-  gradient.addColorStop(0.7, `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.4)`);
+  const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, baseRadius * 2.5);
+  gradient.addColorStop(0, `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.9)`);
+  gradient.addColorStop(0.5, `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.6)`);
+  gradient.addColorStop(0.8, `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.3)`);
   gradient.addColorStop(1, `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0)`);
 
   ctx.fillStyle = gradient;
   ctx.fill();
 
-  // Contour subtil
-  ctx.strokeStyle = `rgba(${color[0] + 50}, ${color[1] + 50}, ${color[2] + 50}, 0.6)`;
-  ctx.lineWidth = 1;
+  // Contour lumineux
+  ctx.shadowBlur = 8;
+  ctx.strokeStyle = `rgba(${Math.min(color[0] + 80, 255)}, ${Math.min(color[1] + 80, 255)}, ${Math.min(color[2] + 80, 255)}, 0.8)`;
+  ctx.lineWidth = 1.5;
   ctx.stroke();
+
+  // Ajouter un petit point central brillant si vitesse élevée
+  if (speed > 4) {
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = `rgba(255, 255, 255, ${speed / 10})`;
+    ctx.beginPath();
+    ctx.arc(0, 0, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   ctx.restore();
 }

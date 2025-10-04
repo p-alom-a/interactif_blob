@@ -91,8 +91,8 @@ export function evolvePopulation(currentPopulation, populationSize) {
       const childBrain = brainCrossover(parentA.brain, parentB.brain);
 
       // Position aléatoire
-      const x = (Math.random() - 0.5) * window.innerWidth;
-      const y = (Math.random() - 0.5) * window.innerHeight;
+      const x = Math.random() * window.innerWidth;
+      const y = Math.random() * window.innerHeight;
       child = new NeuralBoid(x, y, childBrain);
     } else {
       // Clone d'un parent sélectionné

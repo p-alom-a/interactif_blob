@@ -66,7 +66,7 @@ export function calculateFitness(boid, cursor, neighbors, screenWidth, screenHei
   }
 
   // 5. Pénalité vitesse excessive (économie d'énergie)
-  const MAX_SPEED = 4; // Doit correspondre à MAX_SPEED dans NeuralBoid
+  const MAX_SPEED = 8; // Doit correspondre à MAX_SPEED dans NeuralBoid
   if (boid.velocity.mag() > MAX_SPEED * 0.9) {
     score -= SPEED_PENALTY;
   }

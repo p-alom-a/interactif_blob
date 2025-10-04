@@ -2,9 +2,9 @@ import { Vector2 } from '../utils/mathHelpers';
 import { createBrain, predict, cloneBrain } from '../ml/BrainModel';
 
 // Constantes de mouvement
-const MAX_FORCE = 0.8;  // Force pour des réactions plus fluides
-const MAX_SPEED = 5;
-const FRICTION = 0.98;  // Damping pour fluidité
+const MAX_FORCE = 1.5;  // Forces plus fortes = réactions plus vives
+const MAX_SPEED = 8;     // Vitesse max augmentée
+const FRICTION = 0.95;   // Moins de friction = plus de fluidité
 const PERCEPTION_RADIUS = 100;
 
 export class NeuralBoid {
@@ -105,6 +105,14 @@ export class NeuralBoid {
     const output = predict(this.brain, inputs);
     const force = new Vector2(output[0], output[1]);
     force.mult(MAX_FORCE);
+
+    // Petit biais de mouvement pour éviter l'immobilité
+    const currentSpeed = this.velocity.mag();
+    if (currentSpeed < 1) {
+      // Si presque immobile, ajouter une petite force aléatoire
+      force.add(Vector2.random2D().mult(0.3));
+    }
+
     return force;
   }
 
