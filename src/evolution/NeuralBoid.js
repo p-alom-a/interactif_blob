@@ -1,10 +1,10 @@
 import { Vector2 } from '../utils/mathHelpers';
 import { createBrain, predict, cloneBrain } from '../ml/BrainModel';
-import * as THREE from 'three';
 
 // Constantes de mouvement
-const MAX_FORCE = 0.3;
-const MAX_SPEED = 4;
+const MAX_FORCE = 0.8;  // Force pour des réactions plus fluides
+const MAX_SPEED = 5;
+const FRICTION = 0.98;  // Damping pour fluidité
 const PERCEPTION_RADIUS = 100;
 
 export class NeuralBoid {
@@ -19,9 +19,6 @@ export class NeuralBoid {
 
     // Fitness pour l'évolution
     this.fitness = 0;
-
-    // Mesh Three.js (sera initialisé par la scène)
-    this.mesh = null;
 
     // Historique de positions pour les trails
     this.trail = [];
@@ -76,9 +73,9 @@ export class NeuralBoid {
     // 6. Vitesse actuelle (magnitude)
     inputs.push(this.velocity.mag() / MAX_SPEED);
 
-    // 7-8. Position X et Y relative (normalisée 0-1, coordonnées centrées)
-    inputs.push((this.position.x / screenWidth) + 0.5);
-    inputs.push((this.position.y / screenHeight) + 0.5);
+    // 7-8. Position X et Y relative (normalisée 0-1)
+    inputs.push(this.position.x / screenWidth);
+    inputs.push(this.position.y / screenHeight);
 
     return inputs;
   }
@@ -124,28 +121,21 @@ export class NeuralBoid {
   update(screenWidth, screenHeight) {
     // Physique
     this.velocity.add(this.acceleration);
+    this.velocity.mult(FRICTION);  // Friction pour mouvements fluides
     this.velocity.limit(MAX_SPEED);
     this.position.add(this.velocity);
     this.acceleration.mult(0);
 
-    // Wraparound aux bords (coordonnées centrées)
-    const halfW = screenWidth / 2;
-    const halfH = screenHeight / 2;
-    if (this.position.x < -halfW) this.position.x = halfW;
-    if (this.position.x > halfW) this.position.x = -halfW;
-    if (this.position.y < -halfH) this.position.y = halfH;
-    if (this.position.y > halfH) this.position.y = -halfH;
+    // Wraparound aux bords (coordonnées normales 0 → width/height)
+    if (this.position.x < 0) this.position.x = screenWidth;
+    if (this.position.x > screenWidth) this.position.x = 0;
+    if (this.position.y < 0) this.position.y = screenHeight;
+    if (this.position.y > screenHeight) this.position.y = 0;
 
     // Mettre à jour le trail
     this.trail.unshift({ x: this.position.x, y: this.position.y });
     if (this.trail.length > this.maxTrailLength) {
       this.trail.pop();
-    }
-
-    // Mettre à jour le mesh Three.js si présent
-    if (this.mesh) {
-      this.mesh.position.x = this.position.x;
-      this.mesh.position.y = this.position.y;
     }
   }
 
@@ -153,12 +143,10 @@ export class NeuralBoid {
    * Vérifie si le boid est hors limites
    */
   isOutOfBounds(screenWidth, screenHeight, margin = 50) {
-    const halfW = screenWidth / 2;
-    const halfH = screenHeight / 2;
-    return this.position.x < -halfW - margin ||
-           this.position.x > halfW + margin ||
-           this.position.y < -halfH - margin ||
-           this.position.y > halfH + margin;
+    return this.position.x < -margin ||
+           this.position.x > screenWidth + margin ||
+           this.position.y < -margin ||
+           this.position.y > screenHeight + margin;
   }
 
   /**
@@ -176,10 +164,6 @@ export class NeuralBoid {
   dispose() {
     if (this.brain) {
       this.brain.dispose();
-    }
-    if (this.mesh) {
-      this.mesh.geometry.dispose();
-      this.mesh.material.dispose();
     }
   }
 }
