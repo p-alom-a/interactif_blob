@@ -19,6 +19,7 @@ export class Population {
     this.isEvolving = true;
     this.currentBehavior = '🧬 Initialisation';
     this.lastCursor = null;
+    this.lastBehaviorCheck = 0; // Timer pour la détection de comportement
 
     // Initialiser la première génération
     this.initializePopulation();
@@ -78,8 +79,9 @@ export class Population {
     this.generationTimer += deltaTime;
 
     // Détecter comportement toutes les 2 secondes
-    if (Math.floor(this.generationTimer) % 2 === 0 && cursor) {
+    if (this.generationTimer - this.lastBehaviorCheck >= 2.0 && cursor) {
       this.currentBehavior = detectBehavior(this.boids, cursor);
+      this.lastBehaviorCheck = this.generationTimer;
     }
 
     // Si génération terminée → évolution
@@ -121,6 +123,7 @@ export class Population {
     // Nouvelle génération
     this.generation++;
     this.generationTimer = 0;
+    this.lastBehaviorCheck = 0; // Reset du timer de détection
 
     console.log(`✨ Génération ${this.generation} créée par évolution`);
   }
@@ -135,8 +138,10 @@ export class Population {
     // Réinitialiser
     this.generation = 1;
     this.generationTimer = 0;
+    this.lastBehaviorCheck = 0;
     this.fitnessHistory = [];
     this.stats = { avg: 0, best: 0, worst: 0, median: 0 };
+    this.currentBehavior = '🧬 Initialisation';
 
     // Nouvelle population aléatoire
     this.initializePopulation();

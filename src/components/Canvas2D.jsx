@@ -50,8 +50,11 @@ function Canvas2D() {
       const cursor = cursorRef.current;
 
       // Calculer delta time
-      const deltaTime = (currentTime - lastTimeRef.current) / 1000; // en secondes
+      let deltaTime = (currentTime - lastTimeRef.current) / 1000; // en secondes
       lastTimeRef.current = currentTime;
+
+      // Limiter deltaTime pour éviter les sauts (ex: changement d'onglet)
+      deltaTime = Math.min(deltaTime, 0.1); // Max 100ms par frame
 
       // Mettre à jour la population (gère évolution automatiquement)
       population.update(cursor, width, height, deltaTime);
