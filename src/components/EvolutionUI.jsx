@@ -8,6 +8,7 @@ function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, on
   const [remainingTime, setRemainingTime] = useState(20);
   const [fitnessHistory, setFitnessHistory] = useState([]);
   const [behavior, setBehavior] = useState('🧬 Initialisation');
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   useEffect(() => {
     // Mettre à jour les stats toutes les 100ms
@@ -91,10 +92,12 @@ function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, on
       color: '#00ff88',
       fontFamily: 'monospace',
       fontSize: '14px',
-      minWidth: '280px',
+      minWidth: isCollapsed ? '220px' : '280px',
+      maxWidth: isCollapsed ? '220px' : '320px',
       border: '1px solid rgba(0, 255, 136, 0.3)',
       backdropFilter: 'blur(10px)',
-      zIndex: 1000
+      zIndex: 1000,
+      transition: 'all 0.3s ease-in-out'
     }}>
       {/* Titre */}
       <div style={{
@@ -103,12 +106,38 @@ function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, on
         marginBottom: '15px',
         display: 'flex',
         alignItems: 'center',
+        justifyContent: 'space-between',
         gap: '10px'
       }}>
-        <span>🧬</span>
-        <span>GÉNÉRATION {generation}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span>🧬</span>
+          <span>GÉNÉRATION {generation}</span>
+        </div>
+
+        {/* Bouton collapse/expand */}
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          style={{
+            padding: '6px 10px',
+            backgroundColor: 'rgba(255, 255, 255, 0.1)',
+            color: '#fff',
+            border: '1px solid rgba(255, 255, 255, 0.3)',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '14px',
+            fontFamily: 'monospace',
+            fontWeight: 'bold',
+            transition: 'all 0.2s'
+          }}
+          title={isCollapsed ? "Agrandir le panneau" : "Réduire le panneau"}
+        >
+          {isCollapsed ? '▼' : '▲'}
+        </button>
       </div>
 
+      {/* Contenu collapsible */}
+      {!isCollapsed && (
+      <>
       {/* Barre de progression */}
       <div style={{ marginBottom: '15px' }}>
         <div style={{
@@ -369,6 +398,8 @@ function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, on
         💡 Les particules <strong>évoluent</strong> pour éviter votre curseur.
         Observez l'amélioration génération après génération !
       </div>
+      </>
+      )}
     </div>
   );
 }

@@ -3,8 +3,8 @@ import { crossover as brainCrossover, mutateBrain } from '../ml/BrainModel';
 import { normalizeFitnesses } from './FitnessEvaluator';
 
 // Paramètres évolutionnaires
-export const MUTATION_RATE = 0.3;  // 30% pour accélérer l'apprentissage initial
-export const ELITE_COUNT = 5;       // Top 5 préservés intacts
+export const MUTATION_RATE = 0.2;  // ⬇️ de 0.3 (stabiliser l'apprentissage)
+export const ELITE_COUNT = 5;       // ⚪ Top 5 préservés intacts (sécurité avec 50 boids)
 export const CROSSOVER_RATE = 0.7;  // 70% crossover, 30% clones
 
 /**

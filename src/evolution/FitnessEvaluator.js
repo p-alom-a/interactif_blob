@@ -3,10 +3,10 @@ import { Vector2 } from '../utils/mathHelpers';
 // Constantes de fitness
 const DANGER_RADIUS = 100;          // Distance critique au curseur
 const IDEAL_COHESION_DIST = 80;     // Distance idéale entre voisins
-const COHESION_WEIGHT = 1.0;
-const AVOIDANCE_WEIGHT = 2.0;       // Évitement curseur prioritaire
-const ALIGNMENT_WEIGHT = 0.5;
-const BOUNDARY_PENALTY = 20;
+const COHESION_WEIGHT = 1.2;        // ⬆️ de 1.0 (groupes serrés)
+const AVOIDANCE_WEIGHT = 2.0;       // ⚪ Évitement curseur prioritaire
+const ALIGNMENT_WEIGHT = 1.0;       // ⬆️ de 0.5 (mouvements coordonnés)
+const BOUNDARY_PENALTY = 20;        // ⚪ Pénalité sortie écran
 const SPEED_PENALTY = 2;
 
 /**

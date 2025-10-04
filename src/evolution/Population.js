@@ -5,8 +5,8 @@ import { saveBrain, loadBrain, downloadBrain } from '../ml/BrainModel';
 import { detectBehavior } from './BehaviorAnalyzer';
 import { ArtificialCursor } from '../utils/ArtificialCursor';
 
-const GENERATION_DURATION = 20; // secondes par génération
-const POPULATION_SIZE = 100;
+const GENERATION_DURATION = 30; // ⬆️ de 20s (plus de temps pour apprendre)
+const POPULATION_SIZE = 50; // Réduit pour meilleures performances
 
 export class Population {
   constructor(size = POPULATION_SIZE) {

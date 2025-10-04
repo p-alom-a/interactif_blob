@@ -3,7 +3,7 @@ import { Population } from '../evolution/Population';
 import { Vector2, interpolateColor } from '../utils/mathHelpers';
 import EvolutionUI from './EvolutionUI';
 
-const PARTICLE_BASE_SIZE = 8;
+const PARTICLE_BASE_SIZE = 12; // Augmenté car moins de particules
 const LINK_DISTANCE = 60;
 
 function Canvas2D() {
@@ -15,6 +15,10 @@ function Canvas2D() {
   const [, forceUpdate] = useState(0);
   const [cursorMode, setCursorMode] = useState('auto');
   const [aiCursorBehavior, setAiCursorBehavior] = useState('hunter');
+
+  // Refs pour éviter les à-coups dus aux closures
+  const cursorModeRef = useRef('auto');
+  const aiCursorBehaviorRef = useRef('hunter');
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -49,7 +53,9 @@ function Canvas2D() {
 
       const width = canvas.width;
       const height = canvas.height;
-      const cursor = cursorRef.current;
+
+      // 1. Récupérer le curseur souris (pour mode manual)
+      const manualCursor = cursorRef.current;
 
       // Calculer delta time
       let deltaTime = (currentTime - lastTimeRef.current) / 1000; // en secondes
@@ -58,8 +64,17 @@ function Canvas2D() {
       // Limiter deltaTime pour éviter les sauts (ex: changement d'onglet)
       deltaTime = Math.min(deltaTime, 0.1); // Max 100ms par frame
 
-      // Mettre à jour la population (gère évolution automatiquement)
-      population.update(cursor, width, height, deltaTime);
+      // 2. Mettre à jour la population (elle choisit le bon curseur)
+      population.update(manualCursor, width, height, deltaTime);
+
+      // 3. Récupérer le curseur EFFECTIF utilisé par la population
+      const currentMode = cursorModeRef.current;
+      let activeCursor;
+      if (currentMode === 'auto') {
+        activeCursor = population.artificialCursor.position;
+      } else {
+        activeCursor = manualCursor;
+      }
 
       // Background avec fade pour effet de trail
       ctx.fillStyle = 'rgba(10, 10, 20, 0.25)';
@@ -68,16 +83,16 @@ function Canvas2D() {
       // Dessiner les liens entre particules proches
       drawLinks(ctx, population.boids);
 
-      // Dessiner chaque boid
+      // 4. Dessiner chaque boid avec le BON curseur
       population.boids.forEach((boid) => {
-        drawBoid(ctx, boid, cursor);
+        drawBoid(ctx, boid, activeCursor); // ✅ Bon curseur
       });
 
       // Dessiner le curseur artificiel si mode auto
-      if (cursorMode === 'auto' && populationRef.current) {
+      if (currentMode === 'auto' && populationRef.current) {
         const aiPos = populationRef.current.getCursorPosition();
         if (aiPos) {
-          drawAICursor(ctx, aiPos.x, aiPos.y, aiCursorBehavior);
+          drawAICursor(ctx, aiPos.x, aiPos.y, population.artificialCursor.mode);
         }
       }
     };
@@ -135,17 +150,19 @@ function Canvas2D() {
   };
 
   const handleCursorModeToggle = () => {
-    const newMode = cursorMode === 'auto' ? 'manual' : 'auto';
-    console.log('🔄 Toggle curseur:', cursorMode, '→', newMode);
-    setCursorMode(newMode);
+    const newMode = cursorModeRef.current === 'auto' ? 'manual' : 'auto';
+    console.log('🔄 Toggle curseur:', cursorModeRef.current, '→', newMode);
+    cursorModeRef.current = newMode;
+    setCursorMode(newMode); // Pour l'UI
     if (populationRef.current) {
       populationRef.current.setCursorMode(newMode);
     }
   };
 
   const handleAICursorBehaviorChange = (behavior) => {
-    console.log('🔄 Changement comportement IA:', aiCursorBehavior, '→', behavior);
-    setAiCursorBehavior(behavior);
+    console.log('🔄 Changement comportement IA:', aiCursorBehaviorRef.current, '→', behavior);
+    aiCursorBehaviorRef.current = behavior;
+    setAiCursorBehavior(behavior); // Pour l'UI
     if (populationRef.current) {
       populationRef.current.setAICursorBehavior(behavior);
     }
@@ -154,44 +171,69 @@ function Canvas2D() {
   function drawAICursor(ctx, x, y, mode) {
     ctx.save();
 
-    // Couleur selon le mode
-    const colors = {
-      hunter: [255, 100, 100],   // Rouge
-      predator: [255, 50, 255],  // Magenta
-      patrol: [100, 200, 255],   // Bleu
-      random: [255, 255, 100]    // Jaune
+    // Couleurs et config selon le mode
+    const modeConfig = {
+      hunter: {
+        color: [255, 100, 100],
+        label: 'CHASSEUR',
+        icon: '🎯'
+      },
+      predator: {
+        color: [255, 50, 255],
+        label: 'PRÉDATEUR',
+        icon: '⚡'
+      },
+      patrol: {
+        color: [100, 200, 255],
+        label: 'PATROL',
+        icon: '🔄'
+      },
+      random: {
+        color: [255, 255, 100],
+        label: 'ALÉATOIRE',
+        icon: '🎲'
+      }
     };
-    const color = colors[mode] || [255, 100, 100];
 
-    // Cercle pulsant
+    const config = modeConfig[mode] || modeConfig.hunter;
+    const color = config.color;
     const time = Date.now() * 0.005;
-    const pulseRadius = 25 + Math.sin(time) * 8;
 
-    ctx.strokeStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.8)`;
+    // Cercle intérieur rempli
+    ctx.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.7)`;
+    ctx.beginPath();
+    ctx.arc(x, y, 15, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Croix centrale avec rotation
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(time * 0.5);
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 1)';
     ctx.lineWidth = 3;
+
     ctx.beginPath();
-    ctx.arc(x, y, pulseRadius, 0, Math.PI * 2);
+    ctx.moveTo(-10, 0);
+    ctx.lineTo(10, 0);
+    ctx.moveTo(0, -10);
+    ctx.lineTo(0, 10);
     ctx.stroke();
 
-    // Cercle intérieur
-    ctx.strokeStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, 1)`;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(x, y, 12, 0, Math.PI * 2);
-    ctx.stroke();
+    ctx.restore();
 
-    // Croix centrale
-    ctx.beginPath();
-    ctx.moveTo(x - 8, y);
-    ctx.lineTo(x + 8, y);
-    ctx.moveTo(x, y - 8);
-    ctx.lineTo(x, y + 8);
-    ctx.stroke();
-
-    // Label "IA"
-    ctx.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, 1)`;
+    // Label avec icône
+    const labelText = `${config.icon} ${config.label}`;
     ctx.font = 'bold 14px monospace';
-    ctx.fillText('IA', x + 30, y + 5);
+    const labelWidth = ctx.measureText(labelText).width;
+
+    // Background du label
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.fillRect(x + 40, y - 10, labelWidth + 12, 20);
+
+    // Texte du label
+    ctx.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, 1)`;
+    ctx.fillText(labelText, x + 46, y + 4);
 
     ctx.restore();
   }
@@ -238,17 +280,10 @@ function drawLinks(ctx, boids) {
         ctx.strokeStyle = `rgba(${colorIntensity}, ${colorIntensity + 50}, 255, ${opacity})`;
         ctx.lineWidth = 0.8;
 
-        // Effet de glow subtil
-        ctx.shadowBlur = 3;
-        ctx.shadowColor = `rgba(100, 200, 255, ${opacity * 0.5})`;
-
         ctx.beginPath();
         ctx.moveTo(boids[i].position.x, boids[i].position.y);
         ctx.lineTo(boids[j].position.x, boids[j].position.y);
         ctx.stroke();
-
-        // Reset shadow
-        ctx.shadowBlur = 0;
       }
     }
   }
@@ -274,10 +309,6 @@ function drawBoid(ctx, boid, cursor) {
   ctx.save();
   ctx.translate(position.x, position.y);
   ctx.rotate(angle);
-
-  // Effet de glow externe
-  ctx.shadowBlur = 15 + speed * 2;
-  ctx.shadowColor = `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.6)`;
 
   // Dessiner une forme blobby organique (ellipse étirée)
   ctx.beginPath();
@@ -325,14 +356,12 @@ function drawBoid(ctx, boid, cursor) {
   ctx.fill();
 
   // Contour lumineux
-  ctx.shadowBlur = 8;
   ctx.strokeStyle = `rgba(${Math.min(color[0] + 80, 255)}, ${Math.min(color[1] + 80, 255)}, ${Math.min(color[2] + 80, 255)}, 0.8)`;
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
   // Ajouter un petit point central brillant si vitesse élevée
   if (speed > 4) {
-    ctx.shadowBlur = 10;
     ctx.fillStyle = `rgba(255, 255, 255, ${speed / 10})`;
     ctx.beginPath();
     ctx.arc(0, 0, 2, 0, Math.PI * 2);
