@@ -30,8 +30,8 @@ function Canvas2D() {
       canvas.height = window.innerHeight;
 
       // Mettre à jour les dimensions du prédateur
-      if (population && population.predator) {
-        population.predator.updateScreenSize(window.innerWidth, window.innerHeight);
+      if (populationRef.current && populationRef.current.predator) {
+        populationRef.current.predator.updateScreenSize(window.innerWidth, window.innerHeight);
       }
     };
     resizeCanvas();
