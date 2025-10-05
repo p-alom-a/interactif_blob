@@ -381,6 +381,7 @@ function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, on
               <option value="isolator">🔍 Cible Isolé</option>
               <option value="disruptor">💥 Disrupteur</option>
               <option value="adaptive">🧠 Adaptatif</option>
+              <option value="border_patrol">🚧 Gardien des Bords</option>
               <option value="patrol">🔄 Patrouille</option>
               <option value="random">🎲 Téléporteur</option>
             </select>

@@ -3,7 +3,7 @@ import { Population } from '../evolution/Population';
 import { Vector2, interpolateColor } from '../utils/mathHelpers';
 import EvolutionUI from './EvolutionUI';
 
-const PARTICLE_BASE_SIZE = 12; // Augmenté car moins de particules
+const PARTICLE_BASE_SIZE = 16; // Augmenté pour réduire espace disponible (12→16)
 const LINK_DISTANCE = 60;
 
 function Canvas2D() {
@@ -197,6 +197,11 @@ function Canvas2D() {
         color: [100, 255, 200],
         label: 'ADAPTATIF',
         icon: '🧠'
+      },
+      border_patrol: {
+        color: [255, 165, 0],
+        label: 'GARDIEN',
+        icon: '🚧'
       },
       patrol: {
         color: [100, 200, 255],

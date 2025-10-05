@@ -14,6 +14,11 @@ export function detectBehavior(boids, cursor) {
     zigzagging: checkZigzag(boids)
   };
 
+  // Clamp de sécurité : garantir tous les scores entre 0 et 1
+  Object.keys(behaviors).forEach(key => {
+    behaviors[key] = Math.max(0, Math.min(1, behaviors[key]));
+  });
+
   console.log('📊 SCORES COMPORTEMENTS:', {
     coordinated: behaviors.coordinated.toFixed(3),
     exploring: behaviors.exploring.toFixed(3),
@@ -52,7 +57,9 @@ function checkCoordination(boids) {
     }
   }
 
-  return count > 0 ? totalAlignment / count : 0;
+  // Mapper de [-1, 1] vers [0, 1]
+  const alignment = count > 0 ? totalAlignment / count : 0;
+  return (alignment + 1) / 2;
 }
 
 /**
@@ -63,7 +70,10 @@ function checkExploration(boids) {
   const avgDistance = calculateAverageDistance(boids);
 
   // Exploration = vitesse élevée + distance élevée
-  return (avgSpeed / 8) * 0.5 + (avgDistance / 200) * 0.5;
+  // Seuils ajustés : vitesse max=8, distance réaliste=100
+  const speedScore = Math.min(1, avgSpeed / 8);
+  const distScore = Math.min(1, avgDistance / 100);
+  return speedScore * 0.5 + distScore * 0.5;
 }
 
 /**
@@ -73,7 +83,8 @@ function checkHuddling(boids) {
   const avgDistance = calculateAverageDistance(boids);
 
   // Plus la distance est faible, plus le score est élevé
-  return Math.max(0, 1 - avgDistance / 100);
+  // Seuil ajusté à 80 (distance réaliste de regroupement)
+  return Math.max(0, 1 - avgDistance / 80);
 }
 
 /**
@@ -94,8 +105,11 @@ function checkFleeing(boids, cursor) {
     // Produit scalaire : -1 = fuite parfaite, 1 = attraction
     const dot = velocityNorm.x * dirToCursor.x + velocityNorm.y * dirToCursor.y;
 
-    if (distToCursor < 200 && dot < -0.5) {
-      fleeingCount++;
+    // Condition assouplie : distance 300px, seuil -0.3
+    // Pondération : plus proche du prédateur = score plus élevé
+    if (distToCursor < 300 && dot < -0.3) {
+      const weight = 1 - (distToCursor / 300);
+      fleeingCount += weight;
     }
   });
 

@@ -6,8 +6,8 @@ const MAX_FORCE = 1.5;  // Forces plus fortes = réactions plus vives
 const MAX_SPEED = 8;     // Vitesse max augmentée
 const FRICTION = 0.95;   // Moins de friction = plus de fluidité
 const PERCEPTION_RADIUS = 100;
-const EDGE_MARGIN = 50;  // Distance au bord pour activer le turn factor
-const TURN_FACTOR = 0.5; // Force de répulsion aux bords
+const EDGE_MARGIN = 100;  // Distance au bord pour activer le turn factor (augmenté 50→100)
+const TURN_FACTOR = 1.5;  // Force de répulsion aux bords (augmenté 0.5→1.5)
 
 export class NeuralBoid {
   constructor(x, y, brain = null) {
@@ -136,18 +136,32 @@ export class NeuralBoid {
     this.position.add(this.velocity);
     this.acceleration.mult(0);
 
-    // Turn factor : force douce de répulsion aux bords
+    // Force progressive exponentielle aux bords
+    // Plus on s'approche du bord, plus la force est forte (évite de coller)
+
+    // Bord gauche
     if (this.position.x < EDGE_MARGIN) {
-      this.velocity.x += TURN_FACTOR;
+      const distToEdge = this.position.x;
+      const force = TURN_FACTOR * Math.pow((EDGE_MARGIN - distToEdge) / EDGE_MARGIN, 2);
+      this.velocity.x += force;
     }
+    // Bord droit
     if (this.position.x > screenWidth - EDGE_MARGIN) {
-      this.velocity.x -= TURN_FACTOR;
+      const distToEdge = screenWidth - this.position.x;
+      const force = TURN_FACTOR * Math.pow((EDGE_MARGIN - distToEdge) / EDGE_MARGIN, 2);
+      this.velocity.x -= force;
     }
+    // Bord haut
     if (this.position.y < EDGE_MARGIN) {
-      this.velocity.y += TURN_FACTOR;
+      const distToEdge = this.position.y;
+      const force = TURN_FACTOR * Math.pow((EDGE_MARGIN - distToEdge) / EDGE_MARGIN, 2);
+      this.velocity.y += force;
     }
+    // Bord bas
     if (this.position.y > screenHeight - EDGE_MARGIN) {
-      this.velocity.y -= TURN_FACTOR;
+      const distToEdge = screenHeight - this.position.y;
+      const force = TURN_FACTOR * Math.pow((EDGE_MARGIN - distToEdge) / EDGE_MARGIN, 2);
+      this.velocity.y -= force;
     }
 
     // Mettre à jour le trail

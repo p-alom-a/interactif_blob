@@ -24,6 +24,7 @@ export class Predator {
     this.state = 'approach';  // Pour disruptor et ambush
     this.currentStrategy = 0; // Pour adaptive
     this.targetBoid = null;   // Pour tracking
+    this.borderSide = 0;      // Pour border_patrol (0=haut, 1=droite, 2=bas, 3=gauche)
 
     console.log('🦁 Prédateur créé - Mode:', this.mode, 'Position initiale:', this.position);
   }
@@ -71,6 +72,8 @@ export class Predator {
         return this.updateDisruptor(boids, deltaTime);
       case 'adaptive':
         return this.updateAdaptive(boids, deltaTime);
+      case 'border_patrol':
+        return this.updateBorderPatrol(deltaTime);
       case 'patrol':
         return this.updatePatrol(deltaTime);
       case 'random':
@@ -274,6 +277,43 @@ export class Predator {
     this.mode = currentMode; // Restaurer le mode adaptive
 
     return result;
+  }
+
+  /**
+   * Mode Border Patrol : Patrouille le long des bords en rectangle
+   * Force les particules vers le centre de l'écran
+   */
+  updateBorderPatrol(deltaTime) {
+    const margin = 50; // Distance du bord
+    const speed = 5 * this.aggressiveness;
+    const cornerThreshold = 100; // Distance pour changer de côté
+
+    // Définir les coins du rectangle
+    const corners = [
+      { x: margin, y: margin },                              // Coin haut-gauche
+      { x: this.screenWidth - margin, y: margin },           // Coin haut-droit
+      { x: this.screenWidth - margin, y: this.screenHeight - margin }, // Coin bas-droit
+      { x: margin, y: this.screenHeight - margin }           // Coin bas-gauche
+    ];
+
+    // Coin cible actuel
+    const targetCorner = corners[this.borderSide];
+
+    // Se déplacer vers le coin cible
+    const dx = targetCorner.x - this.position.x;
+    const dy = targetCorner.y - this.position.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < cornerThreshold) {
+      // Passer au coin suivant
+      this.borderSide = (this.borderSide + 1) % 4;
+    } else {
+      // Avancer vers le coin
+      this.position.x += (dx / dist) * speed;
+      this.position.y += (dy / dist) * speed;
+    }
+
+    return this.position;
   }
 
   /**
