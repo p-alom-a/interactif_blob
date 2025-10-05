@@ -14,11 +14,11 @@ function Canvas2D() {
   const lastTimeRef = useRef(performance.now());
   const [, forceUpdate] = useState(0);
   const [cursorMode, setCursorMode] = useState('auto');
-  const [aiCursorBehavior, setAiCursorBehavior] = useState('hunter');
+  const [predatorBehavior, setPredatorBehavior] = useState('center_attack');
 
   // Refs pour éviter les à-coups dus aux closures
   const cursorModeRef = useRef('auto');
-  const aiCursorBehaviorRef = useRef('hunter');
+  const predatorBehaviorRef = useRef('center_attack');
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -71,7 +71,7 @@ function Canvas2D() {
       const currentMode = cursorModeRef.current;
       let activeCursor;
       if (currentMode === 'auto') {
-        activeCursor = population.artificialCursor.position;
+        activeCursor = population.predator.position;
       } else {
         activeCursor = manualCursor;
       }
@@ -88,11 +88,11 @@ function Canvas2D() {
         drawBoid(ctx, boid, activeCursor); // ✅ Bon curseur
       });
 
-      // Dessiner le curseur artificiel si mode auto
+      // Dessiner le prédateur si mode auto
       if (currentMode === 'auto' && populationRef.current) {
-        const aiPos = populationRef.current.getCursorPosition();
-        if (aiPos) {
-          drawAICursor(ctx, aiPos.x, aiPos.y, population.artificialCursor.mode);
+        const predatorPos = populationRef.current.getPredatorPosition();
+        if (predatorPos) {
+          drawPredator(ctx, predatorPos.x, predatorPos.y, population.predator.mode);
         }
       }
     };
@@ -159,29 +159,44 @@ function Canvas2D() {
     }
   };
 
-  const handleAICursorBehaviorChange = (behavior) => {
-    console.log('🔄 Changement comportement IA:', aiCursorBehaviorRef.current, '→', behavior);
-    aiCursorBehaviorRef.current = behavior;
-    setAiCursorBehavior(behavior); // Pour l'UI
+  const handlePredatorBehaviorChange = (behavior) => {
+    console.log('🔄 Changement comportement prédateur:', predatorBehaviorRef.current, '→', behavior);
+    predatorBehaviorRef.current = behavior;
+    setPredatorBehavior(behavior); // Pour l'UI
     if (populationRef.current) {
-      populationRef.current.setAICursorBehavior(behavior);
+      populationRef.current.setPredatorBehavior(behavior);
     }
   };
 
-  function drawAICursor(ctx, x, y, mode) {
+  function drawPredator(ctx, x, y, mode) {
     ctx.save();
 
     // Couleurs et config selon le mode
     const modeConfig = {
-      hunter: {
+      center_attack: {
         color: [255, 100, 100],
-        label: 'CHASSEUR',
+        label: 'CENTRE',
         icon: '🎯'
       },
-      predator: {
+      nearest_attack: {
         color: [255, 50, 255],
-        label: 'PRÉDATEUR',
+        label: 'PROCHE',
         icon: '⚡'
+      },
+      isolator: {
+        color: [255, 150, 0],
+        label: 'ISOLÉ',
+        icon: '🔍'
+      },
+      disruptor: {
+        color: [255, 0, 100],
+        label: 'CHAOS',
+        icon: '💥'
+      },
+      adaptive: {
+        color: [100, 255, 200],
+        label: 'ADAPTATIF',
+        icon: '🧠'
       },
       patrol: {
         color: [100, 200, 255],
@@ -195,7 +210,7 @@ function Canvas2D() {
       }
     };
 
-    const config = modeConfig[mode] || modeConfig.hunter;
+    const config = modeConfig[mode] || modeConfig.center_attack;
     const color = config.color;
     const time = Date.now() * 0.005;
 
@@ -258,8 +273,8 @@ function Canvas2D() {
         onDownload={handleDownload}
         cursorMode={cursorMode}
         onCursorModeToggle={handleCursorModeToggle}
-        aiCursorBehavior={aiCursorBehavior}
-        onAICursorBehaviorChange={handleAICursorBehaviorChange}
+        predatorBehavior={predatorBehavior}
+        onPredatorBehaviorChange={handlePredatorBehaviorChange}
       />
     </>
   );

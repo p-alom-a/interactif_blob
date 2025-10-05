@@ -1,12 +1,11 @@
 import { Vector2 } from '../utils/mathHelpers';
 
 // Constantes de fitness
-const DANGER_RADIUS = 100;          // Distance critique au curseur
+const DEFAULT_DANGER_RADIUS = 100;  // Distance critique au curseur (par défaut)
 const IDEAL_COHESION_DIST = 80;     // Distance idéale entre voisins
 const COHESION_WEIGHT = 1.2;        // ⬆️ de 1.0 (groupes serrés)
 const AVOIDANCE_WEIGHT = 2.0;       // ⚪ Évitement curseur prioritaire
 const ALIGNMENT_WEIGHT = 1.0;       // ⬆️ de 0.5 (mouvements coordonnés)
-const BOUNDARY_PENALTY = 20;        // ⚪ Pénalité sortie écran
 const SPEED_PENALTY = 2;
 
 /**
@@ -26,9 +25,9 @@ export function calculateFitness(boid, cursor, neighbors, screenWidth, screenHei
   // 1. Évitement curseur (prioritaire)
   const distToCursor = Vector2.dist(boid.position, cursor);
 
-  if (distToCursor < DANGER_RADIUS) {
+  if (distToCursor < DEFAULT_DANGER_RADIUS) {
     // Pénalité forte si trop proche
-    score -= (DANGER_RADIUS - distToCursor) / 10 * AVOIDANCE_WEIGHT;
+    score -= (DEFAULT_DANGER_RADIUS - distToCursor) / 10 * AVOIDANCE_WEIGHT;
   } else {
     // Récompense si loin du curseur
     score += Math.min(distToCursor * 0.01, 5) * AVOIDANCE_WEIGHT;
@@ -60,12 +59,7 @@ export function calculateFitness(boid, cursor, neighbors, screenWidth, screenHei
     score += avgAlignment * ALIGNMENT_WEIGHT;
   }
 
-  // 4. Survie (rester dans les limites de l'écran)
-  if (boid.isOutOfBounds(screenWidth, screenHeight)) {
-    score -= BOUNDARY_PENALTY;
-  }
-
-  // 5. Pénalité vitesse excessive (économie d'énergie)
+  // 4. Pénalité vitesse excessive (économie d'énergie)
   const MAX_SPEED = 8; // Doit correspondre à MAX_SPEED dans NeuralBoid
   if (boid.velocity.mag() > MAX_SPEED * 0.9) {
     score -= SPEED_PENALTY;

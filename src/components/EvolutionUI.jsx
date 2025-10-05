@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, onDownload, cursorMode, onCursorModeToggle, aiCursorBehavior, onAICursorBehaviorChange }) {
+function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, onDownload, cursorMode, onCursorModeToggle, predatorBehavior, onPredatorBehaviorChange }) {
   const [stats, setStats] = useState({ avg: 0, best: 0, worst: 0, median: 0 });
   const [generation, setGeneration] = useState(1);
   const [progress, setProgress] = useState(0);
@@ -358,11 +358,11 @@ function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, on
               color: 'rgba(255, 255, 255, 0.5)',
               marginBottom: '6px'
             }}>
-              Comportement IA:
+              Stratégie Prédateur:
             </div>
             <select
-              value={aiCursorBehavior}
-              onChange={(e) => onAICursorBehaviorChange(e.target.value)}
+              value={predatorBehavior}
+              onChange={(e) => onPredatorBehaviorChange(e.target.value)}
               style={{
                 width: '100%',
                 padding: '8px',
@@ -376,10 +376,13 @@ function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, on
                 outline: 'none'
               }}
             >
-              <option value="hunter">🎯 Chasseur (suit le groupe)</option>
-              <option value="predator">⚡ Prédateur (agressif)</option>
-              <option value="patrol">🔄 Patrouilleur (cercles)</option>
-              <option value="random">🎲 Téléporteur (aléatoire)</option>
+              <option value="center_attack">🎯 Attaque Centre</option>
+              <option value="nearest_attack">⚡ Attaque Proche</option>
+              <option value="isolator">🔍 Cible Isolé</option>
+              <option value="disruptor">💥 Disrupteur</option>
+              <option value="adaptive">🧠 Adaptatif</option>
+              <option value="patrol">🔄 Patrouille</option>
+              <option value="random">🎲 Téléporteur</option>
             </select>
           </div>
         )}

@@ -3,7 +3,7 @@ import { calculateFitness, calculatePopulationStats } from './FitnessEvaluator';
 import { evolvePopulation } from './GeneticAlgorithm';
 import { saveBrain, loadBrain, downloadBrain } from '../ml/BrainModel';
 import { detectBehavior } from './BehaviorAnalyzer';
-import { ArtificialCursor } from '../utils/ArtificialCursor';
+import { Predator } from '../utils/Predator';
 
 const GENERATION_DURATION = 30; // ⬆️ de 20s (plus de temps pour apprendre)
 const POPULATION_SIZE = 50; // Réduit pour meilleures performances
@@ -22,11 +22,11 @@ export class Population {
     this.lastCursor = null;
     this.lastBehaviorCheck = -2; // Timer pour la détection de comportement (force détection immédiate)
 
-    // Curseur artificiel
+    // Prédateur
     this.cursorMode = 'auto'; // 'auto' ou 'manual'
-    this.artificialCursor = new ArtificialCursor(window.innerWidth, window.innerHeight);
+    this.predator = new Predator(window.innerWidth, window.innerHeight);
 
-    console.log('🤖 Population initialisée - Mode curseur:', this.cursorMode);
+    console.log('🦁 Population initialisée - Mode prédateur:', this.cursorMode);
 
     // Initialiser la première génération
     this.initializePopulation();
@@ -60,7 +60,7 @@ export class Population {
     // Déterminer quel curseur utiliser
     let cursor;
     if (this.cursorMode === 'auto') {
-      cursor = this.artificialCursor.update(this.boids, deltaTime);
+      cursor = this.predator.update(this.boids, deltaTime);
     } else {
       cursor = manualCursor;
     }
@@ -273,19 +273,19 @@ export class Population {
   }
 
   /**
-   * Change le comportement du curseur IA
+   * Change le comportement du prédateur
    */
-  setAICursorBehavior(behavior) {
-    this.artificialCursor.setMode(behavior);
-    console.log('🤖 === COMPORTEMENT IA CHANGÉ:', behavior, '===');
+  setPredatorBehavior(behavior) {
+    this.predator.setMode(behavior);
+    console.log('🦁 === COMPORTEMENT PRÉDATEUR CHANGÉ:', behavior, '===');
   }
 
   /**
-   * Récupère la position actuelle du curseur (pour affichage)
+   * Récupère la position actuelle du prédateur (pour affichage)
    */
-  getCursorPosition() {
+  getPredatorPosition() {
     if (this.cursorMode === 'auto') {
-      return this.artificialCursor.position;
+      return this.predator.position;
     }
     return null; // En mode manuel, pas besoin d'afficher
   }

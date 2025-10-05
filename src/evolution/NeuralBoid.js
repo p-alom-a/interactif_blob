@@ -6,6 +6,8 @@ const MAX_FORCE = 1.5;  // Forces plus fortes = réactions plus vives
 const MAX_SPEED = 8;     // Vitesse max augmentée
 const FRICTION = 0.95;   // Moins de friction = plus de fluidité
 const PERCEPTION_RADIUS = 100;
+const EDGE_MARGIN = 50;  // Distance au bord pour activer le turn factor
+const TURN_FACTOR = 0.5; // Force de répulsion aux bords
 
 export class NeuralBoid {
   constructor(x, y, brain = null) {
@@ -134,11 +136,19 @@ export class NeuralBoid {
     this.position.add(this.velocity);
     this.acceleration.mult(0);
 
-    // Wraparound aux bords (coordonnées normales 0 → width/height)
-    if (this.position.x < 0) this.position.x = screenWidth;
-    if (this.position.x > screenWidth) this.position.x = 0;
-    if (this.position.y < 0) this.position.y = screenHeight;
-    if (this.position.y > screenHeight) this.position.y = 0;
+    // Turn factor : force douce de répulsion aux bords
+    if (this.position.x < EDGE_MARGIN) {
+      this.velocity.x += TURN_FACTOR;
+    }
+    if (this.position.x > screenWidth - EDGE_MARGIN) {
+      this.velocity.x -= TURN_FACTOR;
+    }
+    if (this.position.y < EDGE_MARGIN) {
+      this.velocity.y += TURN_FACTOR;
+    }
+    if (this.position.y > screenHeight - EDGE_MARGIN) {
+      this.velocity.y -= TURN_FACTOR;
+    }
 
     // Mettre à jour le trail
     this.trail.unshift({ x: this.position.x, y: this.position.y });
