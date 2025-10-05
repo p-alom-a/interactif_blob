@@ -40,6 +40,9 @@ function Canvas2D() {
     const population = new Population();
     populationRef.current = population;
 
+    // Forcer un re-render pour que EvolutionUI reçoive la population
+    forceUpdate(prev => prev + 1);
+
     // Gestion du curseur
     const handleMouseMove = (event) => {
       cursorRef.current.x = event.clientX;
