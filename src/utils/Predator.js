@@ -361,8 +361,17 @@ export class Predator {
    * Garde le prédateur dans les limites de l'écran
    */
   clampToScreen() {
-    this.position.x = Math.max(0, Math.min(this.screenWidth, this.position.x));
-    this.position.y = Math.max(0, Math.min(this.screenHeight, this.position.y));
+    const margin = 0; // Pas de marge, rester strictement dans les limites
+    this.position.x = Math.max(margin, Math.min(this.screenWidth - margin, this.position.x));
+    this.position.y = Math.max(margin, Math.min(this.screenHeight - margin, this.position.y));
+  }
+
+  /**
+   * Met à jour les dimensions de l'écran (appelé lors du resize)
+   */
+  updateScreenSize(width, height) {
+    this.screenWidth = width;
+    this.screenHeight = height;
   }
 
   /**

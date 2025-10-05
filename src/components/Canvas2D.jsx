@@ -28,6 +28,11 @@ function Canvas2D() {
     const resizeCanvas = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
+
+      // Mettre à jour les dimensions du prédateur
+      if (population && population.predator) {
+        population.predator.updateScreenSize(window.innerWidth, window.innerHeight);
+      }
     };
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
@@ -266,9 +271,11 @@ function Canvas2D() {
       <canvas
         ref={canvasRef}
         style={{
-          display: 'block',
-          width: '100vw',
-          height: '100vh',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
           background: 'rgb(10, 10, 20)',
         }}
       />
