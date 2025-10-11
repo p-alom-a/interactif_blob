@@ -6,26 +6,25 @@ import { Vector2 } from '../utils/mathHelpers';
 export function detectBehavior(boids, cursor) {
   if (boids.length === 0) return '🧬 Initialisation';
 
+  // VERSION REYNOLDS PURE : pas de comportement "fleeing" si pas de curseur
   const behaviors = {
     coordinated: checkCoordination(boids),
     exploring: checkExploration(boids),
     huddling: checkHuddling(boids),
-    fleeing: checkFleeing(boids, cursor),
     zigzagging: checkZigzag(boids)
   };
+
+  // Ajouter fleeing seulement si curseur existe
+  if (cursor) {
+    behaviors.fleeing = checkFleeing(boids, cursor);
+  }
 
   // Clamp de sécurité : garantir tous les scores entre 0 et 1
   Object.keys(behaviors).forEach(key => {
     behaviors[key] = Math.max(0, Math.min(1, behaviors[key]));
   });
 
-  console.log('📊 SCORES COMPORTEMENTS:', {
-    coordinated: behaviors.coordinated.toFixed(3),
-    exploring: behaviors.exploring.toFixed(3),
-    huddling: behaviors.huddling.toFixed(3),
-    fleeing: behaviors.fleeing.toFixed(3),
-    zigzagging: behaviors.zigzagging.toFixed(3)
-  });
+  console.log('📊 SCORES COMPORTEMENTS:', behaviors);
 
   // Retourner le comportement dominant
   const dominant = Object.entries(behaviors)

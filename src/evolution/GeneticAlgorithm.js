@@ -2,9 +2,9 @@ import { NeuralBoid } from './NeuralBoid';
 import { crossover as brainCrossover, mutateBrain } from '../ml/BrainModel';
 import { normalizeFitnesses } from './FitnessEvaluator';
 
-// Paramètres évolutionnaires
-export const MUTATION_RATE = 0.2;  // ⬇️ de 0.3 (stabiliser l'apprentissage)
-export const ELITE_COUNT = 5;       // ⚪ Top 5 préservés intacts (sécurité avec 50 boids)
+// Paramètres évolutionnaires - Optimisés selon RAPPORT.md
+export const MUTATION_RATE = 0.15;  // Augmenté de 0.1 → 0.15 (RAPPORT.md - accélérer apprentissage)
+export const ELITE_COUNT = 5;       // Top 5 préservés intacts
 export const CROSSOVER_RATE = 0.7;  // 70% crossover, 30% clones
 
 /**

@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
-function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, onDownload, cursorMode, onCursorModeToggle, predatorBehavior, onPredatorBehaviorChange }) {
+function EvolutionUI({ population, onReset, onTogglePause, onDownload, onLoadFiles, cursorMode, onCursorModeToggle, predatorBehavior, onPredatorBehaviorChange }) {
+  const fileInputRef = useRef(null);
   const [stats, setStats] = useState({ avg: 0, best: 0, worst: 0, median: 0 });
   const [generation, setGeneration] = useState(1);
   const [progress, setProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [remainingTime, setRemainingTime] = useState(20);
   const [fitnessHistory, setFitnessHistory] = useState([]);
-  const [behavior, setBehavior] = useState('🧬 Initialisation');
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   useEffect(() => {
@@ -19,7 +19,6 @@ function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, on
         setProgress(population.getProgress());
         setRemainingTime(Math.ceil(population.getRemainingTime()));
         setFitnessHistory(population.fitnessHistory);
-        setBehavior(population.currentBehavior);
       }
     }, 100);
 
@@ -29,6 +28,31 @@ function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, on
   const handlePause = () => {
     setIsPaused(!isPaused);
     if (onTogglePause) onTogglePause();
+  };
+
+  const handleFileUpload = (event) => {
+    const files = Array.from(event.target.files);
+    if (files.length < 2) {
+      alert('⚠️ Veuillez sélectionner au moins 2 fichiers : model.json + weights.bin\n(optionnel: metadata.json)');
+      return;
+    }
+
+    // Identifier les fichiers (2 obligatoires + 1 optionnel)
+    const modelJsonFile = files.find(f => f.name.endsWith('.json') && !f.name.includes('metadata'));
+    const binFile = files.find(f => f.name.endsWith('.bin'));
+    const metadataFile = files.find(f => f.name.includes('metadata') && f.name.endsWith('.json'));
+
+    if (!modelJsonFile || !binFile) {
+      alert('⚠️ Fichiers incorrects. Attendus : model.json + weights.bin\n(optionnel: champion-metadata.json)');
+      return;
+    }
+
+    if (onLoadFiles) {
+      onLoadFiles(modelJsonFile, binFile, metadataFile || null);
+    }
+
+    // Reset input
+    event.target.value = '';
   };
 
   // Générer le graphe SVG
@@ -83,21 +107,17 @@ function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, on
 
   return (
     <div style={{
-      position: 'fixed',
-      top: 20,
-      left: 20,
-      backgroundColor: 'rgba(10, 10, 10, 0.85)',
-      padding: '20px',
-      borderRadius: '12px',
-      color: '#00ff88',
+      backgroundColor: 'rgba(15, 20, 25, 0.5)',
+      padding: '24px',
+      borderRadius: '8px',
+      color: '#50b496',
       fontFamily: 'monospace',
       fontSize: '14px',
-      minWidth: isCollapsed ? '220px' : '280px',
-      maxWidth: isCollapsed ? '220px' : '320px',
-      border: '1px solid rgba(0, 255, 136, 0.3)',
-      backdropFilter: 'blur(10px)',
-      zIndex: 1000,
-      transition: 'all 0.3s ease-in-out'
+      width: isCollapsed ? '240px' : '340px',
+      border: '1px solid rgba(80, 180, 150, 0.4)',
+      boxShadow: '0 0 20px rgba(80, 180, 150, 0.15)',
+      transition: 'all 0.3s ease-in-out',
+      flexShrink: 0,
     }}>
       {/* Titre */}
       <div style={{
@@ -110,7 +130,6 @@ function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, on
         gap: '10px'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span>🧬</span>
           <span>GÉNÉRATION {generation}</span>
         </div>
 
@@ -150,7 +169,7 @@ function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, on
           <div style={{
             width: `${progress * 100}%`,
             height: '100%',
-            backgroundColor: '#00ff88',
+            backgroundColor: '#50b496',
             transition: 'width 0.1s linear'
           }} />
         </div>
@@ -173,22 +192,6 @@ function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, on
         </div>
         <div>
           📉 Pire fitness : <span style={{ color: '#ff6666' }}>{stats.worst.toFixed(1)}</span>
-        </div>
-      </div>
-
-      {/* Comportement détecté */}
-      <div style={{
-        marginBottom: '15px',
-        padding: '10px',
-        backgroundColor: 'rgba(100, 200, 255, 0.15)',
-        borderRadius: '8px',
-        border: '1px solid rgba(100, 200, 255, 0.3)'
-      }}>
-        <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: '5px' }}>
-          Comportement observé :
-        </div>
-        <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#64c8ff' }}>
-          {behavior}
         </div>
       </div>
 
@@ -223,95 +226,88 @@ function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, on
         <button
           onClick={handlePause}
           style={{
-            padding: '8px 16px',
-            backgroundColor: isPaused ? '#00ff88' : 'rgba(0, 255, 136, 0.2)',
-            color: isPaused ? '#0a0a0a' : '#00ff88',
-            border: '1px solid #00ff88',
+            padding: '10px 18px',
+            backgroundColor: isPaused ? '#50b496' : 'rgba(80, 180, 150, 0.2)',
+            color: isPaused ? '#0a0a0a' : '#50b496',
+            border: '1px solid #50b496',
             borderRadius: '6px',
             cursor: 'pointer',
             fontFamily: 'monospace',
-            fontSize: '12px',
+            fontSize: '13px',
             fontWeight: 'bold',
             transition: 'all 0.2s'
           }}
         >
-          {isPaused ? '▶️ Play' : '⏸️ Pause'}
+          {isPaused ? '▶ Play' : '⏸ Pause'}
         </button>
 
         <button
           onClick={onReset}
           style={{
-            padding: '8px 16px',
-            backgroundColor: 'rgba(255, 100, 100, 0.2)',
-            color: '#ff6666',
-            border: '1px solid #ff6666',
+            padding: '10px 18px',
+            backgroundColor: 'rgba(180, 100, 80, 0.2)',
+            color: '#b46450',
+            border: '1px solid #b46450',
             borderRadius: '6px',
             cursor: 'pointer',
             fontFamily: 'monospace',
-            fontSize: '12px',
+            fontSize: '13px',
             fontWeight: 'bold',
             transition: 'all 0.2s'
           }}
         >
-          🔄 Reset
-        </button>
-
-        <button
-          onClick={onSpeedUp}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: 'rgba(255, 255, 0, 0.2)',
-            color: '#ffff00',
-            border: '1px solid #ffff00',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontFamily: 'monospace',
-            fontSize: '12px',
-            fontWeight: 'bold',
-            transition: 'all 0.2s'
-          }}
-        >
-          ⚡ x2 Speed
-        </button>
-
-        <button
-          onClick={onSave}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: 'rgba(0, 255, 136, 0.2)',
-            color: '#00ff88',
-            border: '1px solid #00ff88',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontFamily: 'monospace',
-            fontSize: '12px',
-            fontWeight: 'bold',
-            transition: 'all 0.2s'
-          }}
-        >
-          💾 Save
+          Reset
         </button>
 
         <button
           onClick={onDownload}
           style={{
-            padding: '8px 16px',
-            backgroundColor: 'rgba(100, 200, 255, 0.2)',
-            color: '#64c8ff',
-            border: '1px solid #64c8ff',
+            padding: '10px 18px',
+            backgroundColor: 'rgba(80, 180, 150, 0.2)',
+            color: '#50b496',
+            border: '1px solid #50b496',
             borderRadius: '6px',
             cursor: 'pointer',
             fontFamily: 'monospace',
-            fontSize: '12px',
+            fontSize: '13px',
             fontWeight: 'bold',
             transition: 'all 0.2s'
           }}
         >
-          📥 Download
+          Download
         </button>
+
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          style={{
+            padding: '10px 18px',
+            backgroundColor: 'rgba(80, 180, 150, 0.2)',
+            color: '#50b496',
+            border: '1px solid #50b496',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontFamily: 'monospace',
+            fontSize: '13px',
+            fontWeight: 'bold',
+            transition: 'all 0.2s'
+          }}
+        >
+          Load
+        </button>
+
+        {/* Input file caché */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept=".json,.bin"
+          onChange={handleFileUpload}
+          style={{ display: 'none' }}
+        />
       </div>
 
-      {/* Contrôle du curseur IA */}
+      {/* Contrôle du curseur IA (seulement si prédateur existe) */}
+      {population?.predator && (
       <div style={{
         marginTop: '15px',
         padding: '12px',
@@ -388,6 +384,7 @@ function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, on
           </div>
         )}
       </div>
+      )}
 
       {/* Info */}
       <div style={{
@@ -399,8 +396,11 @@ function EvolutionUI({ population, onReset, onTogglePause, onSpeedUp, onSave, on
         color: 'rgba(255, 255, 255, 0.7)',
         lineHeight: '1.5'
       }}>
-        💡 Les particules <strong>évoluent</strong> pour éviter votre curseur.
-        Observez l'amélioration génération après génération !
+        {population?.predator ? (
+          <>💡 Les particules <strong>évoluent</strong> pour éviter votre curseur. Observez l'amélioration génération après génération !</>
+        ) : (
+          <>🦅 Les particules <strong>apprennent</strong> les règles de Reynolds (séparation, cohésion, alignement) par évolution génétique.</>
+        )}
       </div>
       </>
       )}

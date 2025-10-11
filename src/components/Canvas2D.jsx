@@ -13,37 +13,39 @@ function Canvas2D() {
   const animationIdRef = useRef(null);
   const lastTimeRef = useRef(performance.now());
   const [, forceUpdate] = useState(0);
-  const [cursorMode, setCursorMode] = useState('auto');
-  const [predatorBehavior, setPredatorBehavior] = useState('center_attack');
-
-  // Refs pour éviter les à-coups dus aux closures
-  const cursorModeRef = useRef('auto');
-  const predatorBehaviorRef = useRef('center_attack');
 
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
 
-    // Dimensionner le canvas
+    // Dimensionner le canvas (RAPPORT.md : canvas plus petit pour densité + performance)
     const resizeCanvas = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      // RAPPORT.md recommandation : canvas réduit
+      // Plus petit = plus de densité de boids = plus de signaux voisins = apprentissage plus rapide
+      canvas.width = 900;
+      canvas.height = 600;
 
-      // Mettre à jour les dimensions du prédateur
-      if (populationRef.current && populationRef.current.predator) {
-        populationRef.current.predator.updateScreenSize(window.innerWidth, window.innerHeight);
-      }
+      console.log('📐 Canvas fixe:', canvas.width, 'x', canvas.height);
     };
     resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
+
+    // Écouter les vrais resize (pas ceux causés par DevTools)
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', resizeCanvas);
+    } else {
+      window.addEventListener('resize', resizeCanvas);
+    }
 
     // Configuration du contexte pour un rendu lisse
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
-    // Initialisation de la population évolutionnaire
+    // Initialisation de la population évolutionnaire avec dimensions canvas
     const population = new Population();
     populationRef.current = population;
+
+    // Initialiser les boids avec les bonnes dimensions
+    population.initializePopulation(canvas.width, canvas.height);
 
     // Forcer un re-render pour que EvolutionUI reçoive la population
     forceUpdate(prev => prev + 1);
@@ -75,15 +77,6 @@ function Canvas2D() {
       // 2. Mettre à jour la population (elle choisit le bon curseur)
       population.update(manualCursor, width, height, deltaTime);
 
-      // 3. Récupérer le curseur EFFECTIF utilisé par la population
-      const currentMode = cursorModeRef.current;
-      let activeCursor;
-      if (currentMode === 'auto') {
-        activeCursor = population.predator.position;
-      } else {
-        activeCursor = manualCursor;
-      }
-
       // Background avec fade pour effet de trail
       ctx.fillStyle = 'rgba(10, 10, 20, 0.25)';
       ctx.fillRect(0, 0, width, height);
@@ -91,25 +84,26 @@ function Canvas2D() {
       // Dessiner les liens entre particules proches
       drawLinks(ctx, population.boids);
 
-      // 4. Dessiner chaque boid avec le BON curseur
-      population.boids.forEach((boid) => {
-        drawBoid(ctx, boid, activeCursor); // ✅ Bon curseur
-      });
+      // 3. Calculer min/max fitness pour normalisation dynamique
+      const fitnesses = population.boids.map(b => b.fitness);
+      const minFitness = Math.min(...fitnesses);
+      const maxFitness = Math.max(...fitnesses);
 
-      // Dessiner le prédateur si mode auto
-      if (currentMode === 'auto' && populationRef.current) {
-        const predatorPos = populationRef.current.getPredatorPosition();
-        if (predatorPos) {
-          drawPredator(ctx, predatorPos.x, predatorPos.y, population.predator.mode);
-        }
-      }
+      // 4. Dessiner chaque boid avec couleur normalisée dynamiquement
+      population.boids.forEach((boid) => {
+        drawBoid(ctx, boid, minFitness, maxFitness);
+      });
     };
 
     animate(performance.now());
 
     // Cleanup
     return () => {
-      window.removeEventListener('resize', resizeCanvas);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', resizeCanvas);
+      } else {
+        window.removeEventListener('resize', resizeCanvas);
+      }
       canvas.removeEventListener('mousemove', handleMouseMove);
       if (animationIdRef.current) {
         cancelAnimationFrame(animationIdRef.current);
@@ -135,47 +129,26 @@ function Canvas2D() {
     }
   };
 
-  const handleSpeedUp = () => {
-    if (populationRef.current) {
-      const currentDuration = populationRef.current.generationDuration;
-      const newDuration = currentDuration === 20 ? 10 : 20;
-      populationRef.current.setGenerationDuration(newDuration);
-      forceUpdate(n => n + 1);
-    }
-  };
-
-  const handleSave = async () => {
-    if (populationRef.current) {
-      await populationRef.current.saveChampion();
-      alert('Champion sauvegardé dans le navigateur !');
-    }
-  };
-
   const handleDownload = async () => {
     if (populationRef.current) {
       await populationRef.current.downloadChampion();
     }
   };
 
-  const handleCursorModeToggle = () => {
-    const newMode = cursorModeRef.current === 'auto' ? 'manual' : 'auto';
-    console.log('🔄 Toggle curseur:', cursorModeRef.current, '→', newMode);
-    cursorModeRef.current = newMode;
-    setCursorMode(newMode); // Pour l'UI
+  const handleLoadFiles = async (jsonFile, binFile, metadataFile = null) => {
     if (populationRef.current) {
-      populationRef.current.setCursorMode(newMode);
+      const success = await populationRef.current.loadChampionFromFiles(jsonFile, binFile, metadataFile);
+      if (success) {
+        const genMsg = metadataFile ? ' (génération restaurée depuis metadata)' : ' (génération extraite du nom)';
+        alert('✅ Champion chargé avec succès ! La population a été réinitialisée.' + genMsg);
+        forceUpdate(n => n + 1);
+      } else {
+        alert('❌ Erreur lors du chargement des fichiers.');
+      }
     }
   };
 
-  const handlePredatorBehaviorChange = (behavior) => {
-    console.log('🔄 Changement comportement prédateur:', predatorBehaviorRef.current, '→', behavior);
-    predatorBehaviorRef.current = behavior;
-    setPredatorBehavior(behavior); // Pour l'UI
-    if (populationRef.current) {
-      populationRef.current.setPredatorBehavior(behavior);
-    }
-  };
-
+  // VERSION REYNOLDS PURE : Plus de prédateur
   function drawPredator(ctx, x, y, mode) {
     ctx.save();
 
@@ -267,31 +240,44 @@ function Canvas2D() {
   }
 
   return (
-    <>
-      <canvas
-        ref={canvasRef}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          background: 'rgb(10, 10, 20)',
-        }}
-      />
-      <EvolutionUI
-        population={populationRef.current}
-        onReset={handleReset}
-        onTogglePause={handleTogglePause}
-        onSpeedUp={handleSpeedUp}
-        onSave={handleSave}
-        onDownload={handleDownload}
-        cursorMode={cursorMode}
-        onCursorModeToggle={handleCursorModeToggle}
-        predatorBehavior={predatorBehavior}
-        onPredatorBehaviorChange={handlePredatorBehaviorChange}
-      />
-    </>
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'rgb(10, 10, 20)',
+    }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '30px',
+      }}>
+        {/* Panneau d'info à gauche */}
+        <EvolutionUI
+          population={populationRef.current}
+          onReset={handleReset}
+          onTogglePause={handleTogglePause}
+          onDownload={handleDownload}
+          onLoadFiles={handleLoadFiles}
+        />
+
+        {/* Canvas à droite */}
+        <canvas
+          ref={canvasRef}
+          style={{
+            width: '900px',
+            height: '600px',
+            border: '1px solid rgba(80, 180, 150, 0.4)',
+            boxShadow: '0 0 20px rgba(80, 180, 150, 0.15)',
+            borderRadius: '8px',
+          }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -319,21 +305,25 @@ function drawLinks(ctx, boids) {
   }
 }
 
-function drawBoid(ctx, boid, cursor) {
+function drawBoid(ctx, boid, minFitness, maxFitness) {
   const { position, velocity } = boid;
 
-  // Calculer la couleur selon distance au curseur
-  const distToCursor = Vector2.dist(position, cursor);
-  const normalizedDist = Math.min(distToCursor / 300, 1);
+  // VERSION REYNOLDS PURE : Couleur selon fitness (normalisation dynamique)
+  // Normaliser entre min et max de la population actuelle
+  const fitnessRange = maxFitness - minFitness;
+  const normalizedFitness = fitnessRange > 0
+    ? (boid.fitness - minFitness) / fitnessRange
+    : 0.5; // Si tous égaux, couleur neutre
+
   const color = interpolateColor(
-    [255, 100, 100], // Rouge (proche du curseur)
-    [100, 255, 150], // Vert (loin du curseur)
-    normalizedDist
+    [255, 100, 100], // Rouge (pire fitness de la population)
+    [100, 255, 150], // Vert (meilleure fitness)
+    normalizedFitness
   );
 
   // Calculer la déformation selon la vitesse
   const speed = velocity.mag();
-  const stretchFactor = 1 + (speed / 8); // Plus rapide = plus étiré
+  const stretchFactor = 1 + (speed / 6); // Plus rapide = plus étiré (MAX_SPEED = 6)
   const angle = Math.atan2(velocity.y, velocity.x);
 
   ctx.save();

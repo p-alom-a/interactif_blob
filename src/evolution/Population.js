@@ -1,11 +1,10 @@
 import { NeuralBoid } from './NeuralBoid';
 import { calculateFitness, calculatePopulationStats } from './FitnessEvaluator';
 import { evolvePopulation } from './GeneticAlgorithm';
-import { saveBrain, loadBrain, downloadBrain } from '../ml/BrainModel';
+import { saveBrain, loadBrain, downloadBrain, loadFromFiles, cloneBrain } from '../ml/BrainModel';
 import { detectBehavior } from './BehaviorAnalyzer';
-import { Predator } from '../utils/Predator';
 
-const GENERATION_DURATION = 30; // ⬆️ de 20s (plus de temps pour apprendre)
+const GENERATION_DURATION = 60; // Augmenté de 30s → 60s (RAPPORT.md)
 const POPULATION_SIZE = 50; // Réduit pour meilleures performances
 
 export class Population {
@@ -22,11 +21,11 @@ export class Population {
     this.lastCursor = null;
     this.lastBehaviorCheck = -2; // Timer pour la détection de comportement (force détection immédiate)
 
-    // Prédateur
-    this.cursorMode = 'auto'; // 'auto' ou 'manual'
-    this.predator = new Predator(window.innerWidth, window.innerHeight);
+    // VERSION REYNOLDS PURE : Pas de prédateur, curseur ignoré
+    this.cursorMode = 'none'; // Désactivé pour apprentissage pur des règles de Reynolds
+    this.predator = null;
 
-    console.log('🦁 Population initialisée - Mode prédateur:', this.cursorMode);
+    console.log('🧬 Population initialisée - Mode: Reynolds pur (sans prédateur)');
 
     // Initialiser la première génération
     this.initializePopulation();
@@ -35,17 +34,21 @@ export class Population {
   /**
    * Crée la population initiale avec des cerveaux aléatoires
    */
-  initializePopulation() {
+  initializePopulation(screenWidth, screenHeight) {
     this.boids = [];
 
+    // Utiliser les dimensions du canvas passées en paramètre (ou fallback)
+    const width = screenWidth || window.innerWidth;
+    const height = screenHeight || window.innerHeight;
+
     for (let i = 0; i < this.size; i++) {
-      const x = Math.random() * window.innerWidth;
-      const y = Math.random() * window.innerHeight;
+      const x = Math.random() * width;
+      const y = Math.random() * height;
       const boid = new NeuralBoid(x, y);
       this.boids.push(boid);
     }
 
-    console.log(`🧬 Génération ${this.generation} : ${this.boids.length} boids créés`);
+    console.log(`🧬 Génération ${this.generation} : ${this.boids.length} boids créés (${width}x${height})`);
   }
 
   /**
@@ -57,36 +60,25 @@ export class Population {
   update(manualCursor, screenWidth, screenHeight, deltaTime) {
     if (!this.isEvolving) return;
 
-    // Déterminer quel curseur utiliser
-    let cursor;
-    if (this.cursorMode === 'auto') {
-      cursor = this.predator.update(this.boids, deltaTime);
-    } else {
-      cursor = manualCursor;
-    }
-
-    // Sauvegarder curseur pour détection de comportement
-    this.lastCursor = cursor;
-
-    // Mettre à jour chaque boid
+    // Mettre à jour chaque boid (optimisé avec cache voisins)
     this.boids.forEach(boid => {
-      // 1. Percevoir l'environnement
-      const inputs = boid.perceive(cursor, this.boids, screenWidth, screenHeight);
-
-      // 2. Penser (décision du NN)
-      const decision = boid.think(inputs);
-
-      // 3. Agir
-      boid.applyForce(decision);
-
-      // 4. Mettre à jour physique
-      boid.update(screenWidth, screenHeight);
-
-      // 5. Trouver voisins pour fitness
+      // 1. Trouver voisins UNE SEULE FOIS (cache pour perceive + fitness)
       const neighbors = boid.findNearestNeighbors(this.boids, 5);
 
-      // 6. Accumuler fitness
-      const frameFitness = calculateFitness(boid, cursor, neighbors, screenWidth, screenHeight);
+      // 2. Percevoir l'environnement avec voisins pré-calculés
+      const inputs = boid.perceive(this.boids, screenWidth, screenHeight, neighbors);
+
+      // 3. Penser (décision du NN)
+      const decision = boid.think(inputs);
+
+      // 4. Agir
+      boid.applyForce(decision);
+
+      // 5. Mettre à jour physique
+      boid.update(screenWidth, screenHeight);
+
+      // 6. Accumuler fitness avec mêmes voisins
+      const frameFitness = calculateFitness(boid, neighbors, screenWidth, screenHeight);
       boid.fitness += frameFitness;
     });
 
@@ -94,16 +86,8 @@ export class Population {
     this.generationTimer += deltaTime;
 
     // Détecter comportement toutes les 1 seconde
-    if (this.generationTimer - this.lastBehaviorCheck >= 1.0 && cursor) {
-      console.log('🔍 DÉTECTION COMPORTEMENT:', {
-        timer: this.generationTimer.toFixed(2),
-        lastCheck: this.lastBehaviorCheck.toFixed(2),
-        cursorPos: { x: cursor.x?.toFixed(0) || cursor.x, y: cursor.y?.toFixed(0) || cursor.y }
-      });
-
-      this.currentBehavior = detectBehavior(this.boids, cursor);
-
-      console.log('✅ Comportement détecté:', this.currentBehavior);
+    if (this.generationTimer - this.lastBehaviorCheck >= 1.0) {
+      this.currentBehavior = detectBehavior(this.boids, null); // null = pas de curseur
       this.lastBehaviorCheck = this.generationTimer;
     }
 
@@ -226,7 +210,7 @@ export class Population {
   }
 
   /**
-   * Télécharge le meilleur boid en fichier
+   * Télécharge le meilleur boid en fichier avec métadonnées
    */
   async downloadChampion() {
     if (this.boids.length === 0) return false;
@@ -234,9 +218,14 @@ export class Population {
     const sorted = [...this.boids].sort((a, b) => b.fitness - a.fitness);
     const champion = sorted[0];
 
-    const success = await downloadBrain(champion.brain, `champion-gen${this.generation}`);
+    // Passer le numéro de génération pour sauvegarde dans metadata
+    const success = await downloadBrain(
+      champion.brain,
+      `champion-gen${this.generation}`,
+      this.generation // NOUVEAU : inclure génération
+    );
     if (success) {
-      console.log(`📥 Champion téléchargé (Génération ${this.generation})`);
+      console.log(`📥 Champion téléchargé (Génération ${this.generation}) + metadata.json`);
     }
     return success;
   }
@@ -252,15 +241,54 @@ export class Population {
     this.boids.forEach(b => b.dispose());
 
     // Créer nouvelle population à partir du champion
+    // IMPORTANT: Cloner le cerveau pour chaque boid pour éviter partage de référence
     this.boids = [];
     for (let i = 0; i < this.size; i++) {
       const x = Math.random() * window.innerWidth;
       const y = Math.random() * window.innerHeight;
-      const boid = new NeuralBoid(x, y, brain);
+      // Premier boid utilise le cerveau original, les autres des clones
+      const boidBrain = i === 0 ? brain : cloneBrain(brain);
+      const boid = new NeuralBoid(x, y, boidBrain);
       this.boids.push(boid);
     }
 
     console.log(`📂 Champion chargé: ${name}`);
+    return true;
+  }
+
+  /**
+   * Charge un champion depuis des fichiers uploadés (.json + .bin + optionnel metadata)
+   */
+  async loadChampionFromFiles(jsonFile, binFile, metadataFile = null) {
+    const result = await loadFromFiles(jsonFile, binFile, metadataFile);
+    if (!result) return false;
+
+    const { model: brain, generation: savedGeneration } = result;
+
+    // Disposer anciens boids
+    this.boids.forEach(b => b.dispose());
+
+    // Créer nouvelle population à partir du champion uploadé
+    // IMPORTANT: Cloner le cerveau pour chaque boid pour éviter partage de référence
+    this.boids = [];
+    for (let i = 0; i < this.size; i++) {
+      const x = Math.random() * window.innerWidth;
+      const y = Math.random() * window.innerHeight;
+      // Premier boid utilise le cerveau original, les autres des clones
+      const boidBrain = i === 0 ? brain : cloneBrain(brain);
+      const boid = new NeuralBoid(x, y, boidBrain);
+      this.boids.push(boid);
+    }
+
+    // RESTAURER LA GÉNÉRATION depuis metadata ou filename
+    this.generation = savedGeneration;
+    this.generationTimer = 0;
+    this.lastBehaviorCheck = 0;
+    this.fitnessHistory = [];
+    this.stats = { avg: 0, best: 0, worst: 0, median: 0 };
+    this.currentBehavior = `Champion Gen ${savedGeneration} chargé`;
+
+    console.log(`📁 Champion chargé depuis fichiers: ${jsonFile.name} (Génération ${savedGeneration})`);
     return true;
   }
 
@@ -276,17 +304,19 @@ export class Population {
    * Change le comportement du prédateur
    */
   setPredatorBehavior(behavior) {
-    this.predator.setMode(behavior);
-    console.log('🦁 === COMPORTEMENT PRÉDATEUR CHANGÉ:', behavior, '===');
+    if (this.predator) {
+      this.predator.setMode(behavior);
+      console.log('🦁 === COMPORTEMENT PRÉDATEUR CHANGÉ:', behavior, '===');
+    }
   }
 
   /**
    * Récupère la position actuelle du prédateur (pour affichage)
    */
   getPredatorPosition() {
-    if (this.cursorMode === 'auto') {
+    if (this.cursorMode === 'auto' && this.predator) {
       return this.predator.position;
     }
-    return null; // En mode manuel, pas besoin d'afficher
+    return null; // En mode manuel ou sans prédateur
   }
 }

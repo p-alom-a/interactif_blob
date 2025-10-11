@@ -1,13 +1,23 @@
 import { Vector2 } from '../utils/mathHelpers';
 import { createBrain, predict, cloneBrain } from '../ml/BrainModel';
 
-// Constantes de mouvement
-const MAX_FORCE = 1.5;  // Forces plus fortes = réactions plus vives
-const MAX_SPEED = 8;     // Vitesse max augmentée
-const FRICTION = 0.95;   // Moins de friction = plus de fluidité
-const PERCEPTION_RADIUS = 100;
-const EDGE_MARGIN = 100;  // Distance au bord pour activer le turn factor (augmenté 50→100)
-const TURN_FACTOR = 1.5;  // Force de répulsion aux bords (augmenté 0.5→1.5)
+// Constantes de mouvement - Standards académiques Cornell
+const MAX_FORCE = 0.6;          // Force maximale appliquée par le NN
+const MAX_SPEED = 6;            // Vitesse maximale (Cornell: 6)
+const MIN_SPEED = 3;            // Vitesse minimale pour éviter immobilité
+const FRICTION = 0.985;         // Friction pour mouvements fluides
+const PERCEPTION_RADIUS = 60;   // Distance de perception (augmentée 40→60 pour groupe unifié)
+const SEPARATION_THRESHOLD = 8; // Distance de séparation (Cornell: 2-8)
+const EDGE_MARGIN = 50;         // Marge avant application forces de bord
+const TURN_FACTOR = 0.5;        // Force de retournement aux bords (augmentée 0.2 → 0.5)
+
+// Exports pour FitnessEvaluator
+export { MAX_SPEED, SEPARATION_THRESHOLD, PERCEPTION_RADIUS };
+
+// Fonction utilitaire pour normalisation stricte
+function clamp(value, min = -1, max = 1) {
+  return Math.max(min, Math.min(max, value));
+}
 
 export class NeuralBoid {
   constructor(x, y, brain = null) {
@@ -29,37 +39,33 @@ export class NeuralBoid {
 
   /**
    * Perçoit l'environnement et crée les inputs pour le réseau de neurones
+   * VERSION REYNOLDS PURE : 8 inputs (RAPPORT.md optimisé)
+   * Tous les inputs sont strictement normalisés entre -1 et 1
+   * @param {Array} boids - Population complète
+   * @param {number} screenWidth - Largeur écran
+   * @param {number} screenHeight - Hauteur écran
+   * @param {Array} cachedNeighbors - Voisins pré-calculés (optionnel, pour optimisation)
    */
-  perceive(cursorPos, boids, screenWidth, screenHeight) {
+  perceive(boids, screenWidth, screenHeight, cachedNeighbors = null) {
     const inputs = [];
-
-    // 1. Distance au curseur (normalisée)
-    const distToCursor = Vector2.dist(this.position, cursorPos);
-    inputs.push(distToCursor / Math.max(screenWidth, screenHeight));
-
-    // 2. Angle vers curseur
-    const angleToCursor = Vector2.angleBetween(this.position, cursorPos);
-    inputs.push(angleToCursor / Math.PI); // Normalisé entre -1 et 1
-
-    // 3-5. Distance moyenne, alignement et cohésion avec 3 voisins les plus proches
-    const neighbors = this.findNearestNeighbors(boids, 3);
+    const neighbors = cachedNeighbors || this.findNearestNeighbors(boids, 5);
 
     if (neighbors.length > 0) {
-      // Distance moyenne
+      // 1. Distance moyenne aux voisins (centrée -1 à 1) - RAPPORT.md fix
       const avgDist = neighbors.reduce((sum, n) =>
         sum + Vector2.dist(this.position, n.position), 0) / neighbors.length;
-      inputs.push(avgDist / PERCEPTION_RADIUS);
+      inputs.push((clamp(avgDist / PERCEPTION_RADIUS, 0, 1) - 0.5) * 2);
 
-      // Alignement moyen (similarité de direction)
+      // 2. Alignement moyen avec voisins (-1 à 1)
       const avgAlignment = neighbors.reduce((sum, n) => {
         const dot = this.velocity.x * n.velocity.x + this.velocity.y * n.velocity.y;
         const mag1 = this.velocity.mag();
         const mag2 = n.velocity.mag();
         return sum + (mag1 && mag2 ? dot / (mag1 * mag2) : 0);
       }, 0) / neighbors.length;
-      inputs.push(avgAlignment);
+      inputs.push(clamp(avgAlignment));
 
-      // Cohésion (direction vers centre du groupe)
+      // 3. Angle vers centre du groupe (-1 à 1)
       const center = neighbors.reduce((acc, n) => {
         acc.x += n.position.x;
         acc.y += n.position.y;
@@ -67,17 +73,35 @@ export class NeuralBoid {
       }, new Vector2(0, 0));
       center.div(neighbors.length);
       const cohesionAngle = Vector2.angleBetween(this.position, center);
-      inputs.push(cohesionAngle / Math.PI);
+      inputs.push(clamp(cohesionAngle / Math.PI));
+
+      // 4. Direction moyenne des voisins (angle normalisé -1 à 1)
+      const avgVelX = neighbors.reduce((sum, n) => sum + n.velocity.x, 0) / neighbors.length;
+      const avgVelY = neighbors.reduce((sum, n) => sum + n.velocity.y, 0) / neighbors.length;
+      const avgVelAngle = Math.atan2(avgVelY, avgVelX);
+      inputs.push(clamp(avgVelAngle / Math.PI));
     } else {
-      inputs.push(0.5, 0, 0); // Valeurs neutres si pas de voisins
+      // Pas de voisins : valeurs neutres
+      inputs.push(0, 0, 0, 0); // Distance, alignement, cohésion, direction
     }
 
-    // 6. Vitesse actuelle (magnitude)
-    inputs.push(this.velocity.mag() / MAX_SPEED);
+    // 5. Vitesse actuelle (centrée -1 à 1) - RAPPORT.md fix
+    inputs.push((clamp(this.velocity.mag() / MAX_SPEED, 0, 1) - 0.5) * 2);
 
-    // 7-8. Position X et Y relative (normalisée 0-1)
-    inputs.push(this.position.x / screenWidth);
-    inputs.push(this.position.y / screenHeight);
+    // 6. Distance au bord le plus proche (centrée -1 à 1) - RAPPORT.md fix
+    const distToEdge = Math.min(
+      this.position.x,
+      this.position.y,
+      screenWidth - this.position.x,
+      screenHeight - this.position.y
+    );
+    inputs.push((clamp(distToEdge / 100, 0, 1) - 0.5) * 2);
+
+    // 7. Position X globale normalisée (-1 à 1) - NOUVEAU (RAPPORT.md)
+    inputs.push(clamp((this.position.x / screenWidth) * 2 - 1));
+
+    // 8. Position Y globale normalisée (-1 à 1) - NOUVEAU (RAPPORT.md)
+    inputs.push(clamp((this.position.y / screenHeight) * 2 - 1));
 
     return inputs;
   }
@@ -108,13 +132,7 @@ export class NeuralBoid {
     const force = new Vector2(output[0], output[1]);
     force.mult(MAX_FORCE);
 
-    // Petit biais de mouvement pour éviter l'immobilité
-    const currentSpeed = this.velocity.mag();
-    if (currentSpeed < 1) {
-      // Si presque immobile, ajouter une petite force aléatoire
-      force.add(Vector2.random2D().mult(0.3));
-    }
-
+    // Note: MIN_SPEED est maintenant appliqué dans update()
     return force;
   }
 
@@ -126,45 +144,65 @@ export class NeuralBoid {
   }
 
   /**
-   * Met à jour la position
+   * Met à jour la position (méthode Cornell standard)
    */
   update(screenWidth, screenHeight) {
-    // Physique
+    // 1. Appliquer accélération (décision du NN)
     this.velocity.add(this.acceleration);
-    this.velocity.mult(FRICTION);  // Friction pour mouvements fluides
-    this.velocity.limit(MAX_SPEED);
-    this.position.add(this.velocity);
-    this.acceleration.mult(0);
+    this.acceleration.mult(0); // Reset APRÈS application
 
-    // Force progressive exponentielle aux bords
-    // Plus on s'approche du bord, plus la force est forte (évite de coller)
+    // 2. Forces de bords PROPORTIONNELLES (RAPPORT.md correction)
+    // Force progressive selon distance au bord (évite coins attracteurs)
 
-    // Bord gauche
+    // Bord gauche/droite
     if (this.position.x < EDGE_MARGIN) {
-      const distToEdge = this.position.x;
-      const force = TURN_FACTOR * Math.pow((EDGE_MARGIN - distToEdge) / EDGE_MARGIN, 2);
-      this.velocity.x += force;
-    }
-    // Bord droit
-    if (this.position.x > screenWidth - EDGE_MARGIN) {
-      const distToEdge = screenWidth - this.position.x;
-      const force = TURN_FACTOR * Math.pow((EDGE_MARGIN - distToEdge) / EDGE_MARGIN, 2);
-      this.velocity.x -= force;
-    }
-    // Bord haut
-    if (this.position.y < EDGE_MARGIN) {
-      const distToEdge = this.position.y;
-      const force = TURN_FACTOR * Math.pow((EDGE_MARGIN - distToEdge) / EDGE_MARGIN, 2);
-      this.velocity.y += force;
-    }
-    // Bord bas
-    if (this.position.y > screenHeight - EDGE_MARGIN) {
-      const distToEdge = screenHeight - this.position.y;
-      const force = TURN_FACTOR * Math.pow((EDGE_MARGIN - distToEdge) / EDGE_MARGIN, 2);
-      this.velocity.y -= force;
+      const edgeStrength = (EDGE_MARGIN - this.position.x) / EDGE_MARGIN;
+      this.velocity.x += TURN_FACTOR * edgeStrength;
+    } else if (this.position.x > screenWidth - EDGE_MARGIN) {
+      const edgeStrength = (this.position.x - (screenWidth - EDGE_MARGIN)) / EDGE_MARGIN;
+      this.velocity.x -= TURN_FACTOR * edgeStrength;
     }
 
-    // Mettre à jour le trail
+    // Bord haut/bas
+    if (this.position.y < EDGE_MARGIN) {
+      const edgeStrength = (EDGE_MARGIN - this.position.y) / EDGE_MARGIN;
+      this.velocity.y += TURN_FACTOR * edgeStrength;
+    } else if (this.position.y > screenHeight - EDGE_MARGIN) {
+      const edgeStrength = (this.position.y - (screenHeight - EDGE_MARGIN)) / EDGE_MARGIN;
+      this.velocity.y -= TURN_FACTOR * edgeStrength;
+    }
+
+    // 3. Appliquer friction
+    this.velocity.mult(FRICTION);
+
+    // 4. Encourager vitesse minimale (anti-paresse douce)
+    const currentSpeed = this.velocity.mag();
+    if (currentSpeed < MIN_SPEED && currentSpeed > 0.1) {
+      // Au lieu de forcer, on booste progressivement vers MIN_SPEED
+      const boost = (MIN_SPEED - currentSpeed) * 0.1; // 10% du manque
+      this.velocity.setMag(currentSpeed + boost);
+    } else if (currentSpeed < 0.1) {
+      // Si quasi-immobile, petite impulsion aléatoire
+      this.velocity.add(Vector2.random2D().mult(0.5));
+    }
+
+    // 5. Limiter vitesse maximale
+    this.velocity.limit(MAX_SPEED);
+
+    // 6. Mettre à jour position
+    this.position.add(this.velocity);
+
+    // 6.5. Rebond doux aux bords (au lieu de clamp strict qui "colle")
+    if (this.position.x < 0 || this.position.x > screenWidth) {
+      this.velocity.x *= -0.8; // Rebond avec friction
+      this.position.x = Math.max(0, Math.min(screenWidth, this.position.x));
+    }
+    if (this.position.y < 0 || this.position.y > screenHeight) {
+      this.velocity.y *= -0.8; // Rebond avec friction
+      this.position.y = Math.max(0, Math.min(screenHeight, this.position.y));
+    }
+
+    // 7. Mettre à jour le trail
     this.trail.unshift({ x: this.position.x, y: this.position.y });
     if (this.trail.length > this.maxTrailLength) {
       this.trail.pop();
